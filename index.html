@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LASTONE</title>
+<meta name="description" content="災害で手元の薬を失った人に、別の地方に預けた本人の薬を届けるWebアプリ（デモ）">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#23508f">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-2: #eef1f6;
+  --fg: #1b2230;
+  --muted: #5a6475;
+  --line: #d8dce4;
+  --accent: #23508f;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3eaf5;
+  --safe: #1d7a4e;
+  --safe-soft: #e0f1e8;
+  --warn: #9a5b00;
+  --warn-soft: #fbefd6;
+  --danger: #b3261e;
+  --danger-soft: #f8e3e1;
+  --map-ok: #e8eef7;
+  --map-cut: #f6ead4;
+  --map-iso: #f3dcdc;
+  --font-body: "Hiragino Sans", "BIZ UDPGothic", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  --font-num: "Hiragino Sans", "BIZ UDGothic", "Yu Gothic UI", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10141b; --surface: #19202a; --surface-2: #222a36; --fg: #e3e8f0; --muted: #9aa5b6; --line: #2c3544;
+    --accent: #8db2ea; --accent-ink: #0f1622; --accent-soft: #1f2d44;
+    --safe: #6fcf9c; --safe-soft: #1b3428; --warn: #e6b25a; --warn-soft: #3a2e17; --danger: #f08a80; --danger-soft: #3d2120;
+    --map-ok: #1d2738; --map-cut: #33291a; --map-iso: #3a2222; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10141b; --surface: #19202a; --surface-2: #222a36; --fg: #e3e8f0; --muted: #9aa5b6; --line: #2c3544;
+  --accent: #8db2ea; --accent-ink: #0f1622; --accent-soft: #1f2d44;
+  --safe: #6fcf9c; --safe-soft: #1b3428; --warn: #e6b25a; --warn-soft: #3a2e17; --danger: #f08a80; --danger-soft: #3d2120;
+  --map-ok: #1d2738; --map-cut: #33291a; --map-iso: #3a2222; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+button, select, input { font: inherit; color: inherit; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.wrap { max-width: 72rem; margin: 0 auto; padding-inline: 16px; padding-block: 1.25rem 3rem; display: flex; flex-direction: column; gap: 1.25rem; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+.brand { display: flex; flex-direction: column; }
+.brand b { font-size: 1.5rem; letter-spacing: .02em; }
+.brand span { color: var(--muted); font-size: .8125rem; }
+.tabs { display: flex; gap: .25rem; background: var(--surface-2); padding: .25rem; border-radius: 8px; }
+.tabs button { white-space: nowrap; border: 0; background: none; padding: .45rem .9rem; border-radius: 6px; cursor: pointer; font-weight: 700; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sample { font-size: .75rem; color: var(--warn); background: var(--warn-soft); padding: .15rem .6rem; border-radius: 4px; font-weight: 700; align-self: flex-start; }
+
+.btn { border: 1px solid var(--line); background: var(--surface); padding: .45rem .85rem; border-radius: 6px; cursor: pointer; font-weight: 700; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: var(--surface); }
+.btn:disabled { opacity: .5; cursor: default; }
+.pill { display: inline-block; font-size: .72rem; font-weight: 700; padding: 0 .5em; border-radius: 3px; white-space: nowrap; line-height: 1.6; }
+.p-imm { background: var(--danger-soft); color: var(--danger); }
+.p-h72 { background: var(--warn-soft); color: var(--warn); }
+.p-ok { background: var(--safe-soft); color: var(--safe); }
+.p-cut { background: var(--warn-soft); color: var(--warn); }
+.p-iso { background: var(--danger-soft); color: var(--danger); }
+.p-info { background: var(--accent-soft); color: var(--accent); }
+.p-lost { background: var(--danger); color: var(--surface); }
+.route { display: inline-block; min-width: 1.5rem; text-align: center; font-weight: 700; border-radius: 4px; padding: 0 .35em; color: var(--surface); }
+.route.A { background: var(--safe); }
+.route.B { background: var(--accent); }
+.route.C { background: var(--warn); }
+
+/* 患者アプリ */
+.patient { display: grid; grid-template-columns: minmax(0, 24rem) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+@media (max-width: 52rem) { .patient { grid-template-columns: 1fr; } }
+.phone { background: var(--surface); border: 1px solid var(--line); border-radius: 28px; padding: 1rem; display: flex; flex-direction: column; gap: .85rem; box-shadow: 0 8px 28px rgba(20,30,50,.08); }
+.phone .bar { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); padding-inline: .4rem; }
+.ph-head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.ph-head b { font-size: 1.1rem; }
+.alert { border-radius: 10px; padding: .75rem .85rem; display: flex; flex-direction: column; gap: .4rem; font-size: .875rem; }
+.alert.calm { background: var(--safe-soft); }
+.alert.disaster { background: var(--danger-soft); }
+.alert b { font-size: .95rem; }
+.drug { border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem; display: flex; flex-direction: column; gap: .35rem; }
+.drug-top { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+.drug-top b { font-size: .95rem; }
+.days-big { font-family: var(--font-num); font-size: 1.35rem; line-height: 1.1; }
+.days-big small { font-family: var(--font-body); font-size: .75rem; color: var(--muted); }
+.meter { display: flex; height: .55rem; border-radius: 3px; overflow: hidden; background: var(--surface-2); }
+.meter .n { background: var(--accent); }
+.meter .r { background: var(--safe); }
+.legend-s { display: flex; gap: .8rem; font-size: .72rem; color: var(--muted); }
+.legend-s i { display: inline-block; width: .6rem; height: .6rem; border-radius: 2px; margin-right: .25rem; vertical-align: -.05rem; }
+.ph-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.qr-card { border: 2px solid var(--fg); border-radius: 10px; padding: .8rem; display: grid; grid-template-columns: 1fr; gap: .6rem; align-items: center; background: var(--surface); }
+.qr-card canvas { width: 100%; max-width: 19rem; aspect-ratio: 1; height: auto; justify-self: center; image-rendering: pixelated; background: #fff; border-radius: 4px; }
+.qr-meta { font-size: .68rem; color: var(--muted); grid-column: 1 / -1; font-family: var(--font-num); }
+.saved { font-size: .7rem; color: var(--muted); text-align: right; }
+.cmp { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.cmp div { background: var(--surface-2); border-radius: 8px; padding: .55rem .7rem; display: flex; flex-direction: column; }
+.cmp span { font-size: .75rem; color: var(--muted); font-weight: 700; }
+.cmp b { font-family: var(--font-num); font-size: 1.5rem; line-height: 1.2; }
+.cmp .bad b { color: var(--danger); } .cmp .good b { color: var(--safe); }
+@media print {
+  body { background: #fff; }
+  body.print-card .wrap > *:not(#view-patient) { display: none !important; }
+  body.print-card #view-patient .patient > div:not(.phone), body.print-card .phone > *:not(#qr) { display: none !important; }
+  body.print-card .phone { border: 0; box-shadow: none; }
+  body.print-card #qr { display: grid !important; width: 14cm; }
+}
+.qr-card dl { margin: 0; font-size: .78rem; line-height: 1.55; display: grid; grid-template-columns: auto 1fr; gap: .1rem .5rem; }
+.qr-card dt { color: var(--muted); }
+.qr-card dd { margin: 0; font-weight: 700; }
+.qr-note { font-size: .7rem; color: var(--muted); grid-column: 1 / -1; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; display: flex; flex-direction: column; gap: .8rem; min-width: 0; }
+.panel h2 { font-size: 1.1rem; margin: 0; line-height: 1.4; }
+.panel p { margin: 0; }
+.muted { color: var(--muted); font-size: .8125rem; }
+
+/* 予備のローテーション */
+.shelf { display: flex; flex-wrap: wrap; gap: 3px; }
+.cell { width: 14px; height: 22px; border-radius: 2px; position: relative; }
+.cell.l0 { background: var(--accent); }
+.cell.l1 { background: #4f7fbf; }
+.cell.l2 { background: #7fa3d6; }
+.cell.res { box-shadow: inset 0 -5px 0 var(--safe); }
+.cell.today { outline: 2px solid var(--fg); outline-offset: 1px; }
+.rot-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; }
+.rot-stats div { background: var(--surface-2); border-radius: 8px; padding: .5rem .6rem; display: flex; flex-direction: column; }
+.rot-stats span { font-size: .72rem; color: var(--muted); }
+.rot-stats b { font-family: var(--font-num); font-size: 1.15rem; }
+@media (max-width: 34rem) { .rot-stats { grid-template-columns: 1fr 1fr; } }
+.lots { font-size: .8rem; display: flex; flex-direction: column; gap: .2rem; }
+.lots div { display: flex; gap: .6rem; align-items: center; }
+.lots i { width: .7rem; height: .7rem; border-radius: 2px; display: inline-block; }
+.row-btns { display: flex; flex-wrap: wrap; gap: .5rem; }
+
+/* トリアージ */
+.kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .85rem 1rem; display: flex; flex-direction: column; gap: .15rem; }
+.kpi span { font-size: .78rem; color: var(--muted); font-weight: 700; }
+.kpi b { font-family: var(--font-num); font-size: 1.8rem; line-height: 1.15; }
+.kpi small { font-size: .75rem; color: var(--muted); }
+.kpi.bad b { color: var(--danger); }
+.kpi.good b { color: var(--safe); }
+@media (max-width: 40rem) { .kpis { grid-template-columns: 1fr; } }
+.kpis.kpi4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 52rem) { .kpis.kpi4 { grid-template-columns: 1fr 1fr; } }
+.controls { display: flex; flex-wrap: wrap; gap: 1rem 1.5rem; align-items: center; }
+.ctl { display: flex; flex-direction: column; gap: .2rem; min-width: 12rem; flex: 1; }
+.ctl label { font-size: .8rem; font-weight: 700; }
+.ctl:first-child { flex: 0 0 auto; min-width: 0; }
+.ctl .sub { display: flex; gap: .4rem; flex-wrap: wrap; }
+.ctl input[type="range"] { width: 100%; accent-color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { white-space: nowrap; border: 0; background: var(--surface); padding: .45rem .8rem; cursor: pointer; font-weight: 700; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: .1rem .6rem; font-size: .75rem; cursor: pointer; }
+.triage { display: grid; grid-template-columns: minmax(0, 22rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 56rem) { .triage { grid-template-columns: 1fr; } }
+.map svg { width: 100%; height: auto; display: block; }
+.map-legend { display: flex; flex-wrap: wrap; gap: .4rem .9rem; font-size: .72rem; color: var(--muted); }
+.map-legend i { display: inline-block; width: .65rem; height: .65rem; border-radius: 50%; margin-right: .25rem; vertical-align: -.05rem; }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: .8125rem; line-height: 1.5; }
+th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
+th { white-space: nowrap; }
+td { white-space: normal; min-width: 4.5rem; }
+td.r { white-space: nowrap; min-width: 0; }
+th { color: var(--muted); font-weight: 700; background: var(--surface-2); position: sticky; top: 0; }
+td.r { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+th.r { text-align: right; }
+tr.need td { background: var(--danger-soft); }
+tr.later td { color: var(--muted); }
+tr:last-child td { border-bottom: none; }
+.tbl-wrap { max-height: 30rem; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.tbl-wrap .tbl { border: 0; border-radius: 0; overflow: visible; }
+.export { font-family: var(--font-num); font-size: .72rem; background: var(--surface-2); border-radius: 8px; padding: .6rem .75rem; white-space: pre; overflow-x: auto; max-height: 12rem; }
+.how { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .6rem; }
+.how div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem; font-size: .8rem; line-height: 1.6; display: flex; flex-direction: column; gap: .2rem; }
+.how b { font-size: .9rem; }
+.how em { font-style: normal; font-size: .7rem; font-weight: 700; color: var(--accent); }
+@media (max-width: 52rem) { .how { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 30rem) { .how { grid-template-columns: 1fr; } }
+footer { font-size: .75rem; color: var(--muted); line-height: 1.7; }
+@media (prefers-reduced-motion: no-preference) { .cell { transition: background .2s; } }
+
+.drug-ed { display: flex; gap: .4rem; flex-wrap: wrap; }
+.cmp.cmp3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 40rem) { .cmp.cmp3 { grid-template-columns: 1fr; } }
+.cmp small { font-size: .7rem; }
+details summary { font-size: .8125rem; }
+#map line.road:hover { stroke: rgba(35, 80, 143, .18); }
+.triage { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 56rem) { .triage { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><b>LASTONE.</b><span>本人の薬の7日分を、自宅と別の地方の「薬バンク」で預かる。災害が起きたら、薬が切れる順に、いまいる場所へ届ける。</span></div>
+    <div class="tabs" role="tablist" aria-label="画面">
+      <button role="tab" id="tab-patient" aria-selected="true" aria-controls="view-patient">患者アプリ</button>
+      <button role="tab" id="tab-triage" aria-selected="false" aria-controls="view-triage">災害時トリアージ（係員）</button>
+    </div>
+  </header>
+  <span class="sample">デモ用の架空データです。人・地区・薬局・道路・数字はすべて見本で、実在の患者や場所ではありません。</span>
+
+  <div class="how" aria-label="しくみ">
+    <div><em>平時</em><b>手元の日数を記録</b>薬ごとに、あと何日分あるか。受け取った日・飲んだ日に更新する</div>
+    <div><em>平時</em><b>別の地方で7日分を預かる</b>薬バンク（薬局）が保管し、期限まで1年を切ったら入れ替える。孤立しやすい地区・一社流通の薬は14日分</div>
+    <div><em>発災</em><b>避難所カードで居場所を伝える</b>署名つきのQR。係員の端末は圏外でも、カメラで読んで登録内容を確かめる</div>
+    <div><em>発災</em><b>切れる順に届ける</b>道路の寸断から届け方を決め、ドローンの便が足りないときは間に合う人数が最大になる順番にする</div>
+  </div>
+
+  <!-- 患者アプリ -->
+  <section id="view-patient" role="tabpanel" aria-labelledby="tab-patient">
+    <div class="patient">
+      <div class="phone" aria-label="患者アプリの画面">
+        <div class="bar"><span class="num" id="ph-date">10/3</span><span>LASTONE</span></div>
+        <div class="ph-head"><b>Aさん（架空）</b><span class="pill p-info">ID LO-0001</span></div>
+        <div id="ph-alert" class="alert calm"></div>
+        <div id="ph-drugs" style="display:flex;flex-direction:column;gap:.6rem"></div>
+        <div class="legend-s"><span><i style="background:var(--accent)"></i>手元（ふだんの処方分）</span><span><i style="background:var(--safe)"></i>預かり（薬バンク）</span></div>
+        <div class="saved" id="saved" aria-live="polite"></div>
+        <div class="ph-actions">
+          <button class="btn" id="btn-qr">避難所カードを出す</button>
+          <button class="btn danger" id="btn-quake">地震が起きた（デモ）</button>
+        </div>
+        <div id="evac" hidden style="display:flex;flex-direction:column;gap:.4rem">
+          <label for="evac-sel" style="font-size:.85rem;font-weight:700">いまいる場所</label>
+          <select id="evac-sel" style="padding:.45rem;border-radius:6px;border:1px solid var(--line);background:var(--surface)">
+            <option value="自宅">自宅（北山地区）</option>
+            <option value="北山小学校 体育館">北山小学校 体育館</option>
+            <option value="本町公民館">本町公民館</option>
+          </select>
+          <button class="btn primary" id="btn-evac">この場所を登録する</button>
+          <button class="btn danger" id="btn-lost">家が壊れて、手元の薬を失った</button>
+        </div>
+        <div id="qr" class="qr-card" hidden>
+          <canvas id="qr-canvas" width="29" height="29" role="img" aria-label="避難所カードのQRコード"></canvas>
+          <dl id="qr-dl"></dl>
+          <span class="qr-note">中身は文字と、薬バンクの署名。係員の端末はカメラで読み、圏外でも登録内容（薬・預け先・期限）が書き換えられていないかを確かめる。手元の日数と場所は本人の申告。紙に印刷して持ち歩ける。</span>
+          <span class="qr-meta" id="qr-meta"></span>
+          <button class="btn" id="btn-print" style="grid-column:1/-1">カードを印刷する</button>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:1rem;min-width:0">
+        <div class="panel">
+          <h2>預かり分の入れ替え（期限まで1年を切ったら、返送箱で）</h2>
+          <p class="muted">預けるのは7日分。飲み薬の期限はたいてい2〜3年あるので、期限まで1年を切った月か、処方が変わった月だけ入れ替える。薬バンクから古い7日分が返送箱つきで届き、先にそれを飲み、次に受け取った薬から7日分を箱に入れて送り返す。手元の量は変わらない。下の帯は36か月分のシミュレーション（この例では約1年半ごとに入れ替わる）。</p>
+          <div class="shelf" id="shelf" aria-label="36か月の月ごとの帯。色は預かっているロット、緑の線は入れ替えた月"></div>
+          <div class="lots" id="lots"></div>
+          <div class="rot-stats">
+            <div><span>経過</span><b id="st-total">0か月</b></div>
+            <div><span>入れ替え</span><b id="st-res">0回</b></div>
+            <div><span>次の入れ替え</span><b id="st-next">—</b></div>
+            <div><span>いまのロットの期限</span><b id="st-exp">—</b></div>
+          </div>
+          <div class="row-btns">
+            <button class="btn" id="btn-day">1か月すすめる</button>
+            <button class="btn" id="btn-week">6か月すすめる</button>
+            <button class="btn primary" id="btn-refill">処方が変わった</button>
+            <button class="btn" id="btn-reset">最初に戻す</button>
+          </div>
+          <p class="muted" id="rot-msg"></p>
+        </div>
+        <div class="panel">
+          <h2>なぜ「別の地方」に預けるのか</h2>
+          <p class="muted">能登半島地震では、珠洲市で卸からの医薬品の供給が戻ったのは発災10日後だった。近くの薬局に備えても、その薬局が同じ地震で被災する。一社流通の希少疾患の薬は、そもそも近くの薬局にない。預かるのは本人に処方済みの薬なので、届けるときに新しい処方箋は要らない。最初は室温で保存できる飲み薬だけを扱う（冷蔵・注射・医療用麻薬は対象外）。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 災害時トリアージ -->
+  <section id="view-triage" role="tabpanel" aria-labelledby="tab-triage" hidden style="display:flex;flex-direction:column;gap:1rem">
+    <div class="panel">
+      <div class="controls">
+        <div class="ctl">
+          <label>預かりのしくみ</label>
+          <div class="seg" role="group" aria-label="預かりのしくみ">
+            <button id="mode-off" aria-pressed="false">LASTONE なし</button>
+            <button id="mode-on" aria-pressed="true">LASTONE あり</button>
+          </div>
+        </div>
+        <div class="ctl">
+          <label for="sup">卸からの供給が戻る日：<span class="num" id="sup-v">10</span>日目</label>
+          <input type="range" id="sup" min="3" max="14" value="10">
+          <div class="sub"><button class="chip" data-sup="3">3日（備蓄要件の想定）</button><button class="chip" data-sup="10">10日（珠洲市の実際）</button></div>
+        </div>
+        <div class="ctl">
+          <label for="day">地図の日付：発災から <span class="num" id="day-v">5</span>日目</label>
+          <input type="range" id="day" min="0" max="14" value="5">
+        </div>
+        <div class="ctl">
+          <label for="cap">ドローン1拠点の便/日（仮置き）：<span class="num" id="cap-v">6</span>件</label>
+          <input type="range" id="cap" min="1" max="12" value="6">
+          <div class="sub"><button class="chip" data-cap="1">1件（機体が少ない）</button><button class="chip" data-cap="12">12件（足りている）</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpis kpi4">
+      <div class="kpi bad"><span>LASTONE なし</span><b class="num" id="k-off">0人</b><small>卸の供給が戻る前に薬が切れる人（24人中）</small></div>
+      <div class="kpi"><span>預けたが、登録順に送る</span><b class="num" id="k-onf">0人</b><small>預けた分が効く（ドローンは登録順）</small></div>
+      <div class="kpi good"><span>LASTONE（預ける＋割り当て）</span><b class="num" id="k-on">0人</b><small>同じ条件で、薬が切れる人</small></div>
+      <div class="kpi"><span>預かり分が届く前に切れる人</span><b class="num" id="k-need">0人</b><small id="k-route">近くの救護所・薬局の在庫で先につなぐ</small></div>
+    </div>
+    <p class="muted" style="margin:0">数え方：どちらのモードでも、車で行ける地区の人は、開いている近くの薬局に同じ薬の在庫があればそこでつなげるとして数えない。LASTONE なしは、それ以外の人が手元の分だけで卸の供給を待つ。LASTONE ありは、預かり分が下の配送計画の日に届き、そこから預けた日数が足される。2つ目は、預けるが、ドローンは登録した順に送った場合（預けた効果と、送る順番の効果を分けて見るため）。</p>
+
+    <div class="triage">
+      <div class="panel map">
+        <h2>架空の町（6地区）と道路</h2>
+        <svg id="map" viewBox="0 0 400 270" role="img" aria-label="6地区の地図。道路、ドローン拠点、患者ごとの薬の残り"></svg>
+        <p class="muted">道路を押すと、通れる・通れないが切り替わる。車で行けない地区は、車で補給できるドローン拠点のうち、飛べる範囲（点線の円）にある拠点から届ける。</p>
+        <div class="map-legend">
+          <span><i style="background:var(--safe)"></i>4日以上もつ</span>
+          <span><i style="background:var(--warn)"></i>3日以内に危険</span>
+          <span><i style="background:var(--danger)"></i>すでに切れて危険</span>
+          <span><i style="background:var(--accent);border-radius:2px"></i>薬局（灰色は閉まっている）</span>
+        </div>
+        <div class="row-btns"><button class="btn" id="btn-roads-reset">道路を発災直後に戻す</button><button class="btn" id="btn-roads-open">全部通れるにする</button></div>
+      </div>
+      <div class="panel" id="cap-panel">
+        <h2>ドローンの便が足りないとき、誰から送るか</h2>
+        <div class="cmp cmp3">
+          <div class="bad"><span>登録した順</span><b class="num" id="c-fifo">0人</b><small class="muted">届く前に切れる人</small></div>
+          <div class="bad"><span>締切順に並べるだけ</span><b class="num" id="c-sorted">0人</b><small class="muted">間に合わない人にも枠を使う</small></div>
+          <div class="good"><span>LASTONE の割り当て</span><b class="num" id="c-edf">0人</b><small class="muted">間に合う人数が最大</small></div>
+        </div>
+        <p class="muted" id="c-note"></p>
+        <div class="tbl"><table id="sweep"></table></div>
+      </div>
+    </div>
+
+    <div class="triage">
+      <div class="panel" id="card-panel">
+        <h2>避難所カードを読む（係員の端末・圏外でよい）</h2>
+        <div class="row-btns">
+          <button class="btn primary" id="btn-cam">カメラで読む</button>
+          <label class="btn" for="card-img">画像から読む</label><input type="file" id="card-img" accept="image/*" hidden>
+        </div>
+        <video id="cam" playsinline muted hidden style="width:100%;border-radius:8px;background:#000"></video>
+        <p class="muted" id="cam-msg"></p>
+        <details>
+          <summary class="muted" style="cursor:pointer">文字を貼り付けて読む・デモのカードを入れる</summary>
+          <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:.5rem">
+            <textarea id="card-in" rows="7" style="width:100%;font-family:var(--font-num);font-size:.78rem;border:1px solid var(--line);border-radius:6px;padding:.5rem;background:var(--surface);color:var(--fg)" aria-label="カードの文字"></textarea>
+            <div class="row-btns">
+              <select id="demo-who" aria-label="デモのカード" style="padding:.4rem;border-radius:6px;border:1px solid var(--line);background:var(--surface)"></select>
+              <button class="btn" id="btn-card-demo">デモのカードを入れる</button>
+              <button class="btn primary" id="btn-card-read">読み込む</button>
+            </div>
+          </div>
+        </details>
+        <p id="card-msg" aria-live="polite" style="margin:0;font-weight:700"></p>
+      </div>
+      <div class="panel" id="log-panel">
+        <h2>この端末の読み取り記録</h2>
+        <p class="muted" id="sync-msg"></p>
+        <div class="tbl"><table id="scanlog"></table></div>
+        <div class="row-btns">
+          <button class="btn" id="btn-sync">サーバーへ送る</button>
+          <button class="btn" id="btn-log-clear">記録を消す</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>届ける順番（危険になる日が早い順）</h2>
+      <p class="muted">危険になる日 ＝ 手元の日数 ＋ 猶予（即時中断不可は0日、48〜72時間以内に確保は2日。分類は厚労科研「難病患者の災害対策ガイドライン」2026による）。LASTONE ありでは、預かり分が届く日までもてば、そこから預けた日数（基本7日、孤立しやすい地区と一社流通の薬は14日）が足される。<span class="route A">A</span> 薬バンクから本人の薬を直送　<span class="route B">B</span> 一社流通で残薬がなく「引当」で始めた人は、卸の引当分を被災地の薬局で特例調剤　<span class="route C">C</span> ドローン</p>
+      <div class="tbl-wrap"><div class="tbl"><table>
+        <thead><tr><th>順</th><th>人</th><th>地区</th><th>薬</th><th class="r">もつ日数</th><th class="r">危険になる日</th><th>届け方</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div></div>
+      <div class="row-btns">
+        <button class="btn primary" id="btn-export">自治体・薬剤師会に渡す一覧（CSV）を作る</button>
+        <span class="muted" id="copy-msg" aria-live="polite"></span>
+      </div>
+      <div class="export" id="export" hidden></div>
+    </div>
+  </section>
+
+  <footer>
+    数字の根拠：珠洲市で卸の供給が戻った日（Koike Y, et al. J Pharm Health Care Sci 2026;12:45）／災害拠点病院の備蓄要件「3日分程度」（医政発0331第33号）／薬の分類（厚労科研「難病患者の災害対策ガイドライン」2026年3月 p.41–42, 75）／災害時の保険調剤の特例（保医発0331第2号）。ドローンの特例飛行は航空法132条の92（自治体の依頼が前提）。患者・地区・道路・手元の日数・ドローンの便数と飛べる距離はすべて架空・仮置き。<br>
+    作り：ロジックは lastone-core.js（配送計画・署名・QR生成）と qr-read.js（QR読み取り）。どちらもブラウザとサーバー（server.js）とテストで同じものを使う。QR生成は Project Nayuki の実装（MIT）の移植、読み取りは規格から自作。
+  </footer>
+</div>
+
+<script src="demo-data.js"></script>
+<script src="lastone-core.js"></script>
+<script src="qr-read.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
