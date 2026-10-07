@@ -90,6 +90,19 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .alert.calm { background: var(--safe-soft); }
 .alert.disaster { background: var(--danger-soft); }
 .alert b { font-size: .95rem; }
+/* 災害時のお知らせは3行だけ。大きめの字で、ラベルと答えを横に並べる */
+.notice { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .35rem .75rem; align-items: baseline; }
+.notice dt { font-size: .8125rem; color: var(--muted); font-weight: 700; white-space: nowrap; }
+.notice dd { margin: 0; font-size: 1.05rem; font-weight: 700; line-height: 1.45; }
+.notice dd.act { color: var(--danger); }
+.alert details { font-size: .8125rem; color: var(--muted); }
+.alert summary { cursor: pointer; min-height: 2.75rem; display: flex; align-items: center; font-weight: 700; list-style: none; }
+.alert summary::-webkit-details-marker { display: none; }
+.alert summary::before { content: "▶"; font-size: .7em; margin-right: .45em; }
+.alert details[open] summary::before { content: "▼"; }
+/* 患者アプリの主なボタンは、スマホで押しやすい高さ（48px）にする */
+.phone .btn, #evac select { min-height: 3rem; font-size: 1rem; padding: .6rem 1rem; border-radius: 10px; }
+.phone .drug-ed .chip { min-height: 2.75rem; font-size: .8125rem; padding: .3rem .8rem; }
 .drug { border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem; display: flex; flex-direction: column; gap: .35rem; }
 .drug-top { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
 .drug-top b { font-size: .95rem; }
@@ -100,7 +113,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .meter .r { background: var(--safe); }
 .legend-s { display: flex; gap: .8rem; font-size: .72rem; color: var(--muted); }
 .legend-s i { display: inline-block; width: .6rem; height: .6rem; border-radius: 2px; margin-right: .25rem; vertical-align: -.05rem; }
-.ph-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.ph-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .5rem; }
 .qr-card { border: 2px solid var(--fg); border-radius: 10px; padding: .8rem; display: grid; grid-template-columns: 1fr; gap: .6rem; align-items: center; background: var(--surface); }
 .qr-card canvas { width: 100%; max-width: 19rem; aspect-ratio: 1; height: auto; justify-self: center; image-rendering: pixelated; background: #fff; border-radius: 4px; }
 .qr-meta { font-size: .68rem; color: var(--muted); grid-column: 1 / -1; font-family: var(--font-num); }

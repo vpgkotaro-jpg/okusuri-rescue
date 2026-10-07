@@ -170,3 +170,23 @@ test("カードごとに最新の読み取りを返す", () => {
   const s = [{ sid: "a-1", id: "LO-0001", at: "2026-10-12T09:00", hand: 2 }, { sid: "b-1", id: "LO-0001", at: "2026-10-12T15:00", hand: 0 }];
   assert.strictEqual(Core.latestByCard(s)["LO-0001"].hand, 0);
 });
+
+/* ---------- 患者アプリの災害時のお知らせ（3行） ---------- */
+test("災害時のお知らせは「いつ届く・受け取る所・それまで」の3行だけで、手元が足りないときは先にもらうよう伝える", () => {
+  const lost = Core.patientNotice({ lost: true, arrival: 3, drone: true, place: "北山小学校 体育館", hand: 0, cls: "imm" });
+  assert.strictEqual(lost.title, "手元の薬を失ったと記録した");
+  assert.deepStrictEqual(lost.rows.map((r) => r[0]), ["いつ届く", "受け取る所", "それまで"]);
+  assert.strictEqual(lost.rows[0][1], "発災3日目ごろ（ドローン）");
+  assert.strictEqual(lost.rows[1][1], "北山小学校 体育館の救護所");
+  assert.ok(lost.short && /先にもらう/.test(lost.rows[2][1]));
+  for (const [, v] of lost.rows) assert.ok(v.length <= 26, "1行に収まる長さ：" + v);
+  // 手元で届くまでもつ人には、待てばよいと伝える
+  const ok = Core.patientNotice({ lost: false, arrival: 1, drone: false, place: "本町公民館", hand: 5, cls: "imm" });
+  assert.ok(!ok.short && /待つ/.test(ok.rows[2][1]));
+  assert.strictEqual(ok.rows[0][1], "発災1日目ごろ（車）");
+  // 届け方がまだない・場所が未登録
+  const none = Core.patientNotice({ lost: true, arrival: null, place: "未登録", hand: 0 });
+  assert.ok(none.short && /調整中/.test(none.rows[0][1]) && /登録/.test(none.rows[1][1]));
+  // 48〜72時間の薬は猶予2日を足して比べる（手元1日・3日目に届く → 1+2=3 で間に合う）
+  assert.ok(!Core.patientNotice({ arrival: 3, place: "自宅", hand: 1, cls: "h72" }).short);
+});

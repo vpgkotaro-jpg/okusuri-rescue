@@ -65,18 +65,21 @@
   function renderPatient() {
     $("ph-date").textContent = fmt(today());
     $("ph-drugs").innerHTML = drugs.map(drugHTML).join("");
+    if (place !== "未登録" && $("evac-sel").value !== place) $("evac-sel").value = place;   // 登録済みの場所を選択欄にも出す
     var al = $("ph-alert");
     if (!quake) {
       al.className = "alert calm";
       al.innerHTML = "<b>いつもどおり</b><span>あなたの薬 <b class='num'>7日分</b> を、薬バンク中部（提携薬局に委託・架空）で預かっています。次の入れ替え：" + fmtYM(addMonths(rot.lot.exp, -12)) + "ごろ（返送箱が届きます）。</span>";
     } else {
       computePlan();
-      var arr = arrival(P[0]), hand = lostA ? 0 : minImmHand();
-      var gapA = arr === null || hand < arr;
+      // 言うことは3行だけ（いつ届くか・どこで受け取るか・それまでどうするか）。理由や仕組みは「くわしく」に畳む
+      var arr = arrival(P[0]);
+      var n = Core.patientNotice({ lost: lostA, arrival: arr, drone: !!P[0].via, place: place, hand: lostA ? 0 : minImmHand(), cls: "imm" });
       al.className = "alert disaster";
-      al.innerHTML = "<b>" + (lostA ? "手元の薬を失ったと記録しました" : "地震が発生しました（デモ）") + "</b><span>" + (lostA ? "この端末に記録しました。通信が戻ったときか、避難所で係員がカードを読んだときに薬バンクへ伝わります（デモでは送信しません）。" : "") + "預かっているあなたの薬7日分は箱詰め済みで、薬バンクに伝わってから24時間以内に発送します（あなたに処方済みの薬なので、新しい処方箋は要りません）。" +
-        "到着の見込み：" + (arr === null ? "<b>届け方を調整中</b>" : "発災 <b class='num'>" + arr + "日目</b>ごろ（" + (P[0].via ? P[0].via + "からドローン" : "車") + "）") + "。届け先：" + (place === "未登録" ? "いまいる場所を登録してください" : esc(place) + "（救護所で係員が確認して渡す）") + "。" +
-        (gapA ? "<br>手元が <b class='num'>" + hand + "日分</b> なので、届くまでの間は近くの救護所・薬局の在庫で先につなぐよう係員に伝わります。" : "<br>手元の分で届くまでもちます。") + "</span>";
+      al.innerHTML = "<b>" + n.title + "</b><dl class='notice'>" +
+        n.rows.map(function (r, k) { return "<dt>" + r[0] + "</dt><dd" + (k === 2 && n.short ? " class='act'" : "") + ">" + esc(r[1]) + "</dd>"; }).join("") + "</dl>" +
+        "<details><summary>くわしく</summary>預かっている7日分は箱詰め済みで、薬バンクに伝わってから24時間以内に発送する。あなたに処方済みの薬なので、新しい処方箋は要らない。" +
+        (lostA ? "「失った」はこの端末に記録した。通信が戻ったときか、救護所で係員がカードを読んだときに薬バンクへ伝わる（デモでは送信しない）。" : "") + "</details>";
     }
     // 36か月の帯
     var cols = ["var(--accent)", "#4f7fbf", "#7fa3d6"], cells = [];

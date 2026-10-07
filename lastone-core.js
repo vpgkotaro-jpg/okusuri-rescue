@@ -260,6 +260,18 @@
   function issuedString(c) {
     return [c.ID, c.name, c["中断不可"] || "", c["72時間"] || "", c["預かり"], c["発行"], c["期限"]].join("|");
   }
+  /* 患者アプリの災害時のお知らせ。言うことを3行に絞る：いつ届くか・どこで受け取るか・それまでどうするか
+   * o: { lost, arrival（届く日。届け方がなければ null）, drone（ドローンで届くか）, place（いまいる場所）, hand（手元の日数）, cls } */
+  function patientNotice(o) {
+    var noRoute = o.arrival === null || o.arrival === undefined;
+    var when = noRoute ? "届け方を調整中（決まったらここに出る）" : "発災" + o.arrival + "日目ごろ（" + (o.drone ? "ドローン" : "車") + "）";
+    var where = !o.place || o.place === "未登録" ? "下で、いまいる場所を登録する"
+      : o.place === "自宅" ? "近くの避難所の救護所" : o.place + "の救護所";
+    var short = noRoute || dangerDay(o.hand, o.cls || "imm") < o.arrival;
+    var until = short ? "救護所でカードを見せ、届くまでの分を先にもらう" : "手元の薬を飲んで待つ（届くまでもつ）";
+    return { title: o.lost ? "手元の薬を失ったと記録した" : "地震が起きた（デモ）", short: short,
+      rows: [["いつ届く", when], ["受け取る所", where], ["それまで", until]] };
+  }
   // 発行側が作るカードの文（署名の行まで）。申告の2行（手元・場所）は空けておき、本人の端末が埋める
   function cardText(f, hand, place, sig) {
     var lines = [CARD_HEAD, "ID:" + f.ID, f.name];
@@ -592,6 +604,7 @@
     parseCard: parseCard,
     issuedString: issuedString,
     cardText: cardText,
+    patientNotice: patientNotice,
     mergeScans: mergeScans,
     latestByCard: latestByCard,
     verifyCard: verifyCard,
