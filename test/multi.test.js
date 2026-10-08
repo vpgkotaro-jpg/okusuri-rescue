@@ -1,7 +1,7 @@
 // 拠点が複数あるときの配送計画と、道路の寸断から届け方を出す処理のテスト
 const test = require("node:test");
 const assert = require("node:assert");
-const Core = require("../lastone-core.js");
+const Core = require("../okusuri-core.js");
 
 // 全探索：一人ずつ「飛べる拠点 × [release, deadline] のどの枠に入れるか／入れないか」を全部試す
 function bruteMax(people, cap) {
@@ -43,7 +43,7 @@ function checkFeasible(r, people, cap) {
   });
 }
 
-test("複数拠点：間に合う人数が全探索の最大と一致する（3,000問）", () => {
+test("複数拠点：間に合う人数が全探索の最大と一致する（1問1〜8人・拠点1〜3つ・1日1〜2件、3,000問）", () => {
   const rnd = rng(20261007);
   for (let t = 0; t < 3000; t++) {
     const { B, people, cap } = randomCase(rnd, 8);
@@ -68,7 +68,7 @@ test("複数拠点：締切順に空き枠を埋めるだけだと最適にな�
   assert.strictEqual(best.base.b, "b1");
 });
 
-test("拠点が1つなら、締切順の貪欲法（schedule）と同じ人数になる（2,000問）", () => {
+test("拠点が1つなら、締切順の貪欲法（schedule）と同じ人数になる（1問1〜12人、2,000問）", () => {
   const rnd = rng(42);
   for (let t = 0; t < 2000; t++) {
     const n = 1 + Math.floor(rnd() * 12), cap = 1 + Math.floor(rnd() * 3);
@@ -110,7 +110,7 @@ const NET = {
   roads: [["hub", "A"], ["A", "B"], ["A", "C"], ["B", "D"]],
   bases: [{ id: "bA", at: "A", range: 12 }, { id: "bB", at: "B", range: 25 }]
 };
-test("道路が通れれば全地区に車で1日目", () => {
+test("道路が通れれば全地区に車で1日後", () => {
   const r = Core.accessPlan(NET, {});
   Object.values(r).forEach((v) => { assert.strictEqual(v.how, "car"); assert.strictEqual(v.release, 1); });
 });
@@ -127,7 +127,7 @@ test("道路を閉じると、その先の地区はドローン（届く拠点�
 });
 
 /* ---------- 比べる相手：締切順・間に合わない人は飛ばす・近い拠点から（skip） ---------- */
-test("skip（締切順で飛ばす、近い拠点から）は、拠点が1つなら最適と同じ。増加路は skip より悪くならない（3,000問）", () => {
+test("skip（締切順で飛ばす、近い拠点から）は、拠点が1つなら最適と同じ。増加路は skip より悪くならない（1問1〜8人、3,000問）", () => {
   const rnd = rng(77);
   let worse = 0;
   for (let t = 0; t < 3000; t++) {

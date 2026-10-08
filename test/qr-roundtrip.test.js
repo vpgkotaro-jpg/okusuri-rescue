@@ -2,7 +2,7 @@
 //   準備：npm install --no-save jsqr@1.4.0   実行：node --test app/test/*.test.js
 const test = require("node:test");
 const assert = require("node:assert");
-const Core = require("../lastone-core.js");
+const Core = require("../okusuri-core.js");
 let jsQR = null;
 try { jsQR = require("jsqr"); } catch (e) { /* 入っていない */ }
 
@@ -18,7 +18,7 @@ function decode(mods, size) {
   return r ? Buffer.from(r.binaryData).toString("utf8") : null;
 }
 
-test("ランダムな文字列を QR にして読み戻すと一致する（型番1〜19）", { skip: !jsQR && "jsqr が入っていない" }, () => {
+test("ランダムな文字列600個を QR にして jsQR で読み戻すと一致する（型番1〜28が出る）", { skip: !jsQR && "jsqr が入っていない" }, () => {
   let seed = 7;
   const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   const chars = "abcXYZ0123 あいう薬避難所カード日分（）\n:-";
@@ -27,16 +27,15 @@ test("ランダムな文字列を QR にして読み戻すと一致する（型�
     const len = 1 + Math.floor(rnd() * (t < 480 ? 120 : 600));
     let s = "";
     for (let i = 0; i < len; i++) s += chars[Math.floor(rnd() * chars.length)];
-    let q;
-    try { q = Core.qrEncode(s); } catch (e) { continue; }   // 型番20に入らない長さは飛ばす
+    const q = Core.qrEncode(s);
     vers.add(q.version);
     assert.strictEqual(decode(q.modules, q.size), s);
   }
-  assert.ok(vers.has(1) && Math.max(...vers) >= 18, [...vers].join(","));
+  assert.ok(vers.has(1) && Math.max(...vers) >= 28, [...vers].join(","));
 });
 
-test("データ領域の10%の四角を半分の確率で塗る（約5%のモジュールが反転）でも読める（30回）", { skip: !jsQR && "jsqr が入っていない" }, () => {
-  const card = "LASTONE 避難所カード\nID:LO-0001\nAさん（架空）\n中断不可:抗てんかん薬・ステロイド\n手元:0日（家が壊れた）\n場所:北山小学校 体育館\n預かり:薬バンク中部 7日分";
+test("jsQR：データ領域に面積10%の四角を置き、中を白黒ランダムに塗り直しても読める（約5%のモジュールが反転、30回）", { skip: !jsQR && "jsqr が入っていない" }, () => {
+  const card = "おくすりレスキュー 避難所カード\nID:OR-0001\nAさん（架空）\n中断不可:抗てんかん薬・ステロイド\n手元:0日（家が壊れた）\n場所:北山小学校 体育館\n預かり:薬バンク中部 7日分";
   const q = Core.qrEncode(card);
   let seed = 11;
   const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;

@@ -1,6 +1,6 @@
 /* 一度開いたら、通信がなくても画面とロジックが動くようにする（https で公開したときだけ有効） */
-var CACHE = "lastone-v4";
-var FILES = ["./", "./index.html", "./demo-data.js", "./lastone-core.js", "./qr-read.js", "./app.js", "./manifest.webmanifest", "./icon.svg"];
+var CACHE = "okusuri-v6";
+var FILES = ["./", "./index.html", "./demo-data.js", "./okusuri-core.js", "./qr-read.js", "./app.js", "./manifest.webmanifest", "./icon.svg"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }).then(function () { return self.skipWaiting(); }));
 });

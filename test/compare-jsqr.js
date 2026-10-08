@@ -3,7 +3,7 @@
 // 画像：文字数20〜249のランダムな文、レベル L/M/Q/H を順に、640×640、
 //       回転 0〜360度・遠近のゆがみ 0〜0.3・ノイズ ±0〜60・明るさのむら 0〜80（乱数の種は固定）
 //       同じ200枚に、ぼかし（半径2の箱型）を足した場合も測る。描き方は自分で作ったものなので、実機のカメラとは違う
-const Core = require("../lastone-core.js");
+const Core = require("../okusuri-core.js");
 const R = require("../qr-read.js");
 const { renderQR } = require("./render.js");
 let jsQR;

@@ -13,3 +13,21 @@ function geoCase(n, nb, cap, R, seed) {
   return { people, ids: bases.map((b) => b.id), cap };
 }
 module.exports = { geoCase };
+// 避難所単位の町：避難所を町の中心ほど多く置き、人を避難所に割り振る。飛べる拠点は避難所からの距離 R 以内
+function geoShelters(n, nb, ns, R, seed) {
+  const rnd = rng(seed * 104729);
+  const bases = Array.from({ length: nb }, (_, i) => ({ id: "b" + i, x: 10 + 80 * i / (nb - 1), y: 50 }));
+  const shelters = [];
+  while (shelters.length < ns) {
+    const x = 50 + (rnd() + rnd() - 1) * 50, y = 50 + (rnd() - 0.5) * 30;
+    const bs = bases.map((b) => [b.id, Math.hypot(b.x - x, b.y - y)]).filter((e) => e[1] <= R).sort((a, b) => a[1] - b[1]).map((e) => e[0]);
+    if (bs.length) shelters.push({ id: "s" + shelters.length, bases: bs });
+  }
+  const people = [];
+  for (let i = 0; i < n; i++) {
+    const s = shelters[Math.floor(rnd() * ns)];
+    people.push({ id: i, shelter: s.id, bases: s.bases, release: 2, deadline: 2 + Math.floor(rnd() * 12) });
+  }
+  return { people, ids: bases.map((b) => b.id) };
+}
+module.exports.geoShelters = geoShelters;

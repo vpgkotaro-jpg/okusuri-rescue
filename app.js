@@ -1,7 +1,7 @@
-/* LASTONE の画面（患者アプリと係員の端末）。ロジックは lastone-core.js と qr-read.js にある */
+/* おくすりレスキューの画面（患者アプリと係員の端末）。ロジックは okusuri-core.js と qr-read.js にある */
 (function () {
   "use strict";
-  var Core = window.LastoneCore, Demo = window.LastoneDemo, QR = window.LastoneQRRead;
+  var Core = window.OkusuriCore, Demo = window.OkusuriDemo, QR = window.OkusuriQRRead;
   var $ = function (id) { return document.getElementById(id); };
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
@@ -79,7 +79,7 @@
       al.innerHTML = "<b>" + n.title + "</b><dl class='notice'>" +
         n.rows.map(function (r, k) { return "<dt>" + r[0] + "</dt><dd" + (k === 2 && n.short ? " class='act'" : "") + ">" + esc(r[1]) + "</dd>"; }).join("") + "</dl>" +
         "<details><summary>くわしく</summary>預かっている7日分は箱詰め済みで、薬バンクに伝わってから24時間以内に発送する。あなたに処方済みの薬なので、新しい処方箋は要らない。" +
-        (lostA ? "「失った」はこの端末に記録した。通信が戻ったときか、救護所で係員がカードを読んだときに薬バンクへ伝わる（デモでは送信しない）。" : "") + "</details>";
+        (lostA ? lostStatus() : "") + "</details>";
     }
     // 36か月の帯
     var cols = ["var(--accent)", "#4f7fbf", "#7fa3d6"], cells = [];
@@ -98,7 +98,7 @@
     // カード
     var f = Demo.issuedFields(ME);
     $("qr-dl").innerHTML = [["名前", f.name], ["中断不可", f["中断不可"]], ["72時間", f["72時間"]], ["手元", lostA ? "0日（家が壊れた）" : minImmHand() + "日分"],
-      ["いる場所", place], ["預かり", f["預かり"]], ["期限", f["期限"]]].map(function (r) { return "<dt>" + r[0] + "</dt><dd>" + esc(r[1]) + "</dd>"; }).join("");
+      ["いる場所", place], ["預かり", f["預かり"]], ["最後の受け取り", f["交付"].replace("/", "・")], ["期限", f["期限"]]].map(function (r) { return "<dt>" + r[0] + "</dt><dd>" + esc(r[1]) + "</dd>"; }).join("");
     drawQR();
     save();
   }
@@ -118,13 +118,13 @@
     $("qr-meta").textContent = "QR 型番" + q.version + "（" + q.size + "×" + q.size + "）・誤り訂正M・マスク" + q.mask + "・" + q.bytes + "バイト・署名 ECDSA P-256";
   }
 
-  /* ---------- この端末の中だけに保存（サーバーには送らない） ---------- */
-  var KEY = "lastone-demo-v2";
+  /* ---------- 手元の日数などは、この端末の中だけに保存する ---------- */
+  var KEY = "okusuri-demo-v2";
   function save() {
     try {
       localStorage.setItem(KEY, JSON.stringify({ quake: quake, place: place, lostA: lostA, drugs: drugs.map(function (d) { return d.hand; }),
         rot: { m: rot.m, swaps: rot.swaps, lotSeq: rot.lotSeq, rx: rot.rx, hist: rot.hist, lot: { id: rot.lot.id, exp: rot.lot.exp.getTime() }, log: rot.log } }));
-      $("saved").innerHTML = "この端末の中だけに保存（サーバーには送らない）　<button class='chip' id='btn-forget'>保存を消す</button>";
+      $("saved").innerHTML = "手元の日数はこの端末の中だけに保存（送るのは「失った」とカードの文だけ）　<button class='chip' id='btn-forget'>保存を消す</button>";
       $("btn-forget").onclick = function () { try { localStorage.removeItem(KEY); } catch (e) {} location.hash = ""; location.reload(); };
     } catch (e) { $("saved").textContent = ""; }
   }
@@ -148,7 +148,24 @@
   window.addEventListener("afterprint", function () { document.body.classList.remove("print-card"); });
   $("btn-quake").addEventListener("click", function () { quake = true; $("evac").hidden = false; renderPatient(); });
   $("btn-evac").addEventListener("click", function () { place = $("evac-sel").value; $("qr").hidden = false; renderPatient(); });
-  $("btn-lost").addEventListener("click", function () { quake = true; lostA = true; if (place === "未登録") place = $("evac-sel").value; $("qr").hidden = false; renderPatient(); });
+  $("btn-lost").addEventListener("click", function () {
+    quake = true; lostA = true; if (place === "未登録") place = $("evac-sel").value; $("qr").hidden = false;
+    lostQueue = { card: myCard(), at: isoNow(), sent: false }; saveLost(); renderPatient(); sendLost();
+  });
+  /* 「失った」をサーバーへ送る。カードの署名で本人のカードだと確かめてもらう。通信がなければ端末にためて、戻ったら送る */
+  var LOST_KEY = "okusuri-lost-v1", lostQueue = null;
+  try { lostQueue = JSON.parse(localStorage.getItem(LOST_KEY) || "null"); } catch (e) { lostQueue = null; }
+  function saveLost() { try { localStorage.setItem(LOST_KEY, JSON.stringify(lostQueue)); } catch (e) {} }
+  function lostStatus() {
+    if (lostQueue && lostQueue.sent) return "「失った」は薬バンクのサーバーに届いた。係員がカードを読んだときに確認する。";
+    return "「失った」はこの端末に記録した。通信が戻ったら薬バンクのサーバーへ送る" + (server === false ? "（いまは送れない" + (location.protocol === "file:" ? "：ファイルとして開いている" : "：サーバーがないか圏外") + "）" : "") + "。";
+  }
+  function sendLost() {
+    if (!lostQueue || lostQueue.sent || server !== true) return;
+    fetch("api/lost", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ card: lostQueue.card, at: lostQueue.at }) })
+      .then(function (r) { return r.json(); })
+      .then(function (res) { if (res.ok) { lostQueue.sent = true; saveLost(); renderPatient(); } }, function () {});
+  }
 
   /* ======================================================================
    * 災害時トリアージ（係員の端末）
@@ -166,16 +183,16 @@
   function jobsNow() {
     return P.filter(function (p) { return access[p.area].how !== "car"; }).map(function (p) {
       var a = access[p.area];
-      return { id: p.i, deadline: Core.dangerDay(hand(p), p.cls), release: a.release, bases: a.bases };
+      return { id: p.i, shelter: p.area, deadline: Core.dangerDay(hand(p), p.cls), release: a.release, bases: a.bases };
     });
   }
   var BASE_IDS = NET.bases.map(function (b) { return b.id; });
   function computePlan() {
     access = Core.accessPlan(NET, closed);
-    var cap = +$("cap").value, jobs = jobsNow();
-    plan = Core.assignDrones(jobs, BASE_IDS, cap, "edf");
-    planF = Core.assignDrones(jobs, BASE_IDS, cap, "fifo");
-    planS = Core.assignDrones(jobs, BASE_IDS, cap, "sorted");
+    var cap = +$("cap").value, pay = +$("pay").value, jobs = jobsNow();
+    plan = Core.planShelters(jobs, BASE_IDS, cap, pay);
+    planF = Core.fillShelters(jobs, BASE_IDS, cap, pay, "fifo");
+    planS = Core.fillShelters(jobs, BASE_IDS, cap, pay, "sorted");
     P.forEach(function (p) { p.via = plan.base[p.i] || null; });
   }
   // 預かり分が届く日（届け方がない地区は null）
@@ -203,16 +220,16 @@
     var r = (p.newDrug ? "B" : "A") + (a.how !== "car" ? "+C" : "");
     if (a.how === "none") return { r: r, text: "届け方なし（どの拠点からも届かない。自治体にヘリ等を要請）" };
     var d = arrival(p);
-    return { r: r, text: (a.how === "car" ? "車" : p.via + "からドローン") + "・" + d + "日目着" };
+    return { r: r, text: (a.how === "car" ? "車" : p.via + "からドローン") + "・" + d + "日後着" };
   }
   function cmpOrder(m) {
     return function (a, b) { return danger(a, m) - danger(b, m) || (arrival(b) || 99) - (arrival(a) || 99) || a.i - b.i; };
   }
 
   function renderTriage() {
-    var sup = +$("sup").value, day = +$("day").value, cap = +$("cap").value;
+    var sup = +$("sup").value, day = +$("day").value, cap = +$("cap").value, pay = +$("pay").value;
     computePlan();
-    $("sup-v").textContent = sup; $("day-v").textContent = day; $("cap-v").textContent = cap;
+    $("sup-v").textContent = sup; $("day-v").textContent = day; $("cap-v").textContent = cap; $("pay-v").textContent = pay;
     $("mode-on").setAttribute("aria-pressed", mode === "on" ? "true" : "false");
     $("mode-off").setAttribute("aria-pressed", mode === "off" ? "true" : "false");
     var off = P.filter(function (p) { return needs(p, "off", sup); }).length;
@@ -229,16 +246,18 @@
     $("c-fifo").textContent = planF.late.length + "人";
     $("c-sorted").textContent = planS.late.length + "人";
     $("c-edf").textContent = plan.late.length + "人";
-    var hdr = "<tr><th>1拠点の便/日</th>", rows = { fifo: "<tr><td>登録した順</td>", sorted: "<tr><td>締切順に並べるだけ</td>", skip: "<tr><td>締切順・間に合わない人は飛ばす（近い拠点から）</td>", edf: "<tr><td>LASTONE の割り当て（増加路）</td>" };
+    var hdr = "<tr><th>1拠点の便/日（1便" + pay + "人分）</th>", rows = { fifo: "<tr><td>登録した順</td>", sorted: "<tr><td>締切順に並べるだけ</td>", skip: "<tr><td>締切順・間に合わない人は飛ばす（近い拠点から）</td>", edf: "<tr><td>おくすりレスキューの割り当て（最大流）</td>" };
     [1, 2, 3, 4, 6, 12].forEach(function (c) {
-      hdr += '<th class="r">' + c + "件</th>";
-      ["fifo", "sorted", "skip", "edf"].forEach(function (k) { rows[k] += '<td class="r">' + Core.assignDrones(jobs, BASE_IDS, c, k).late.length + "人</td>"; });
+      hdr += '<th class="r">' + c + "便</th>";
+      rows.fifo += '<td class="r">' + Core.fillShelters(jobs, BASE_IDS, c, pay, "fifo").late.length + "人</td>";
+      rows.sorted += '<td class="r">' + Core.fillShelters(jobs, BASE_IDS, c, pay, "sorted").late.length + "人</td>";
+      rows.skip += '<td class="r">' + Core.fillShelters(jobs, BASE_IDS, c, pay, "skip").late.length + "人</td>";
+      rows.edf += '<td class="r">' + Core.planShelters(jobs, BASE_IDS, c, pay).late.length + "人</td>";
     });
     $("sweep").innerHTML = hdr + "</tr>" + rows.fifo + "</tr>" + rows.sorted + "</tr>" + rows.skip + "</tr>" + rows.edf + "</tr>";
     var noneN = plan.none.length;
-    $("c-note").textContent = "車で行けない地区の " + nDrone + "人に、ドローン拠点" + BASE_IDS.length + "か所から1拠点1日" + cap + "件ずつ送る計算（数は預かり分が届く前に薬が切れる人）。" +
-      "締切が早い人から順に、空いた枠か、すでに入った人を別の拠点・別の日へ押し出してできる枠に入れる（増加路）。間に合わない人には枠を使わず、近くの在庫でつなぐ。" +
-      "全探索との比較テスト3,000問で、間に合う人数が最大になることを確かめた。この小さな町では「飛ばす」だけで同じ人数になる。拠点が多く、両方から届く人が多い町では差が出る（bench.js：架空の1,000人で117人→100人）。" + (noneN ? "どの拠点からも届かない人が" + noneN + "人いる。" : "");
+    $("c-note").textContent = "車で行けない地区の " + nDrone + "人に、ドローン拠点" + BASE_IDS.length + "か所から1拠点1日" + cap + "便、1便" + pay + "人分ずつ送る（数は預かり分が届く前に薬が切れる人）。" +
+      "1便は1つの地区の避難所へ行く。この小さな町では「締切順で飛ばす」方法と同じ人数になる。差が出るのは、珠洲市の公開データで1便に5人分積んだとき（node noto.js：24人→21人）や、大きな町（node bench.js）。" + (noneN ? "どの拠点からも届かない人が" + noneN + "人いる。" : "");
 
     // 地図
     var svg = [], k;
@@ -263,7 +282,7 @@
       P.filter(function (p) { return p.area === k2; }).forEach(function (p, j) {
         var cx = a.x - 34 + (j % 3) * 30, cy = a.y + 2 + Math.floor(j / 3) * 26;
         var left = danger(p, mode) - day, col = localStock(p) ? "var(--safe)" : left < 0 ? "var(--danger)" : left <= 3 ? "var(--warn)" : "var(--safe)";
-        svg.push('<circle cx="' + cx + '" cy="' + cy + '" r="10" fill="' + col + '"><title>' + p.name + "：" + p.drug + "（危険になる日 " + danger(p, mode) + '日目）</title></circle>');
+        svg.push('<circle cx="' + cx + '" cy="' + cy + '" r="10" fill="' + col + '"><title>' + p.name + "：" + p.drug + "（危険になる日：発災から " + danger(p, mode) + '日後）</title></circle>');
         svg.push('<text x="' + cx + '" y="' + (cy + 4) + '" font-size="10" font-weight="700" text-anchor="middle" fill="var(--surface)" pointer-events="none">' + p.name.charAt(0) + '</text>');
       });
     });
@@ -278,10 +297,10 @@
     var sorted = P.slice().sort(cmpOrder(mode));
     $("rows").innerHTML = sorted.map(function (p, i) {
       var a = AREAS[p.area], need = needs(p, mode, sup), ro = routeOf(p, mode), ls = localStock(p);
-      var tags = (isLost(p) ? ' <span class="pill p-lost">手元を失った</span>' : "") + (mode === "on" && gap(p) && !ls ? ' <span class="pill p-imm">先につなぐ</span>' : "") + (p.scanned ? ' <span class="pill p-info">カード確認</span>' : "");
+      var tags = (isLost(p) ? ' <span class="pill p-lost">手元を失った</span>' : "") + (mode === "on" && gap(p) && !ls ? ' <span class="pill p-imm">先につなぐ</span>' : "") + (p.scanned ? ' <span class="pill p-info">カード確認</span>' : "") + (p.needsCheck && !checkedFor(p) ? ' <span class="pill p-h72">申告を要確認</span>' : "") + (p.capped ? ' <span class="pill p-info">交付の記録で頭打ち</span>' : "");
       return '<tr class="' + (need ? "need" : "later") + '"><td class="r">' + (i + 1) + '</td><td>' + p.name + tags + '</td>' +
         '<td>' + a.name + '</td><td>' + p.drug + ' <span class="pill ' + (p.cls === "imm" ? "p-imm" : "p-h72") + '">' + CLS[p.cls].label + '</span>' + (p.newDrug ? ' <span class="pill p-info">一社流通</span>' : "") + '</td>' +
-        '<td class="r">' + have(p, mode) + '日</td><td class="r">' + danger(p, mode) + '日目</td>' +
+        '<td class="r">' + have(p, mode) + '日</td><td class="r">' + danger(p, mode) + '日後</td>' +
         '<td>' + (ls ? '<span class="muted">' + ls.name + 'の在庫でつなげる</span>' : (mode === "on" ? '<span class="route ' + ro.r.charAt(0) + '">' + ro.r + '</span> ' : "") + ro.text) + '</td></tr>';
     }).join("");
     $("export").hidden = true; $("copy-msg").textContent = "";
@@ -296,7 +315,7 @@
   $("btn-roads-open").addEventListener("click", function () { closed = {}; renderTriage(); });
   $("mode-on").addEventListener("click", function () { mode = "on"; renderTriage(); });
   $("mode-off").addEventListener("click", function () { mode = "off"; renderTriage(); });
-  ["sup", "day", "cap"].forEach(function (id) { $(id).addEventListener("input", renderTriage); });
+  ["sup", "day", "cap", "pay"].forEach(function (id) { $(id).addEventListener("input", renderTriage); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-cap]"), function (b) { b.addEventListener("click", function () { $("cap").value = b.getAttribute("data-cap"); renderTriage(); }); });
   Array.prototype.forEach.call(document.querySelectorAll("[data-sup]"), function (b) { b.addEventListener("click", function () { $("sup").value = b.getAttribute("data-sup"); renderTriage(); }); });
   $("btn-export").addEventListener("click", function () {
@@ -304,7 +323,7 @@
     var list = P.filter(function (p) { return mode === "on" || needs(p, mode, sup); }).sort(cmpOrder(mode));
     var lines = ["順,人,地区,薬,分類,危険になる日,届け方"].concat(list.map(function (p, i) {
       var ls = localStock(p);
-      return [i + 1, p.name, AREAS[p.area].name, p.drug, CLS[p.cls].label, danger(p, mode) + "日目", ls ? ls.name + "の在庫" : routeOf(p, mode).r + " " + routeOf(p, mode).text].join(",");
+      return [i + 1, p.name, AREAS[p.area].name, p.drug, CLS[p.cls].label, danger(p, mode) + "日後", ls ? ls.name + "の在庫" : routeOf(p, mode).r + " " + routeOf(p, mode).text].join(",");
     }));
     if (!list.length) lines.push("（手配が要る人はいません）");
     var text = lines.join("\n"), box = $("export"), msg = $("copy-msg");
@@ -315,8 +334,22 @@
   });
 
   /* ---------- 避難所カードを読む ---------- */
-  var DEV_KEY = "lastone-device", LOG_KEY = "lastone-scans-v1";
-  var dev = (function () { try { var d = localStorage.getItem(DEV_KEY); if (!d) { d = "端末" + Math.random().toString(36).slice(2, 6); localStorage.setItem(DEV_KEY, d); } return d; } catch (e) { return "端末" + Math.random().toString(36).slice(2, 6); } })();
+  var DEV_KEY = "okusuri-device", LOG_KEY = "okusuri-scans-v1";
+  // 端末ID は HTTP のヘッダーで送るので英数字だけにする
+  var dev = (function () { try { var d = localStorage.getItem(DEV_KEY); if (!d || !/^[\w-]+$/.test(d)) { d = "dev-" + Math.random().toString(36).slice(2, 6); localStorage.setItem(DEV_KEY, d); } return d; } catch (e) { return "dev-" + Math.random().toString(36).slice(2, 6); } })();
+  // 係員の端末の鍵。サーバーの OKUSURI_DEVICE_KEYS にこの端末の ID と同じ鍵を登録しておく。送る本文に HMAC-SHA256 を付ける
+  var STAFF_KEY = "okusuri-device-key", devKey = "";
+  try { devKey = localStorage.getItem(STAFF_KEY) || ""; } catch (e) {}
+  $("dev-id").textContent = dev;
+  $("dev-key").value = devKey;
+  $("btn-dev-key").addEventListener("click", function () { devKey = $("dev-key").value.trim(); try { localStorage.setItem(STAFF_KEY, devKey); } catch (e) {} renderLog(); trySync(); });
+  function hmacHex(key, text) {
+    var enc = new TextEncoder();
+    return crypto.subtle.importKey("raw", enc.encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
+      .then(function (k) { return crypto.subtle.sign("HMAC", k, enc.encode(text)); })
+      .then(function (b) { return Array.prototype.map.call(new Uint8Array(b), function (x) { return (x < 16 ? "0" : "") + x.toString(16); }).join(""); });
+  }
+  function checkedFor(p) { return scans.some(function (s) { return s.id === p.id && s.checked; }); }
   var scans = (function () { try { return JSON.parse(localStorage.getItem(LOG_KEY) || "[]"); } catch (e) { return []; } })();
   function saveScans() { try { localStorage.setItem(LOG_KEY, JSON.stringify(scans)); } catch (e) {} }
   function isoNow() { var d = new Date(), z = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()) + "T" + z(d.getHours()) + ":" + z(d.getMinutes()) + ":" + z(d.getSeconds()); }
@@ -330,31 +363,37 @@
     $("card-in").value = p.i === 0 ? myCard() : cardFor(p.src, hand(p) + "日分", "本町公民館");
     $("card-msg").textContent = "";
   });
+  // 手元の日数は申告。署名された交付の記録から出した上限で頭打ちにし、上限より少ない申告には確認待ちの印をつける
+  // （デモの町の日付 10/12 で数える）
   function applyScan(c) {
     var p = P.filter(function (x) { return x.id === c.ID; })[0];
     if (!p) return null;
-    if (c.hand !== null) {
-      if (p.i === 0) lostA = c.hand === 0;   // Aさんは患者アプリと同じ人
-      else { p.lost = c.hand === 0; p.onHand = c.hand; }
+    var h = Core.handCheck(c, Demo.DEMO_TODAY);
+    if (h.use !== null && h.use !== undefined) {
+      if (p.i === 0) lostA = h.use === 0;   // Aさんは患者アプリと同じ人
+      else { p.lost = h.use === 0; p.onHand = h.use; }
     }
     if (p.i === 0 && c["場所"]) place = c["場所"];
-    p.scanned = true;
-    return p;
+    p.scanned = true; p.capped = h.capped; p.needsCheck = h.needsCheck;
+    return { p: p, h: h };
   }
   function importCard(text, how) {
     var msg = $("card-msg");
     msg.style.color = "";
     return Core.verifyCard(text, Demo.ISSUER_PUB, isoNow().slice(0, 10)).then(function (r) {
       if (!r.ok) { msg.style.color = "var(--danger)"; msg.textContent = "読み込まない：" + r.reason; return; }
-      var c = r.card, p = applyScan(c);
-      if (!p) { msg.textContent = "署名は正しいが、この町の名簿にいない人"; return; }
-      scans.push({ sid: dev + "-" + (scans.length + 1) + "-" + Date.now().toString(36), id: c.ID, at: isoNow(), hand: c.hand, place: c["場所"] || "", dev: dev, checked: false, rev: 0, card: text, synced: false });
+      var c = r.card, ap = applyScan(c);
+      if (!ap) { msg.textContent = "署名は正しいが、この町の名簿にいない人"; return; }
+      var p = ap.p, h = ap.h;
+      scans.push({ sid: dev + "-" + (scans.length + 1) + "-" + Date.now().toString(36), id: c.ID, at: isoNow(), hand: h.use, reported: c.hand, needsCheck: h.needsCheck, place: c["場所"] || "", dev: dev, checked: false, rev: 0, card: text, synced: false });
       saveScans();
       if (p.i === 0) renderPatient();
       renderTriage(); renderLog(); trySync();
       var order = P.slice().sort(cmpOrder(mode)).indexOf(p) + 1;
       msg.style.color = "var(--safe)";
-      msg.textContent = (how ? how + "で読んだ。" : "") + "署名と期限を確認：" + c.name + "、手元 " + c.hand + "日、" + (c["場所"] || "場所なし") + "（手元の日数と場所は本人の申告なので、係員が確かめて記録の「確認」に印をつける）。届ける順番の表で " + order + "番目" +
+      msg.textContent = (how ? how + "で読んだ。" : "") + "署名と期限を確認：" + c.name + "、手元 " + c.hand + "日" +
+        (h.capped ? "（交付の記録では多くて" + h.cap + "日なので、" + h.cap + "日として扱う）" : h.needsCheck ? "（交付の記録より少ない。失った・壊れたなら係員が確かめて「確認」に印）" : "") +
+        "、" + (c["場所"] || "場所なし") + "。届ける順番の表で " + order + "番目" +
         (gap(p) && !localStock(p) ? "。預かり分は間に合わないので、近くの救護所・薬局の在庫で先につなぐ。" : "。預かり分は" + routeOf(p, "on").text + "。");
     });
   }
@@ -424,12 +463,12 @@
     var wait = scans.filter(function (s) { return !s.synced; }).length;
     $("sync-msg").textContent = (server === true ? "サーバーにつながっている。" : server === false ? "サーバーなし（" + (location.protocol === "file:" ? "ファイルとして開いている" : "圏外か、サーバーが止まっている") + "）。記録はこの端末にためておき、つながったら送る。" : "サーバーを確認中。") +
       "送信待ち " + wait + "件。端末どうし・サーバーで同じ記録を何度合わせても重ならない。";
-    $("btn-sync").disabled = server !== true || !wait;
+    $("btn-sync").disabled = server !== true || !wait || !devKey;
   }
   $("scanlog").addEventListener("change", function (e) {
     var sid = e.target.getAttribute("data-sid"); if (!sid) return;
     scans.forEach(function (s) { if (s.sid === sid) { s.checked = e.target.checked; s.rev = (s.rev || 0) + 1; s.synced = false; } });
-    saveScans(); renderLog(); trySync();
+    saveScans(); renderLog(); renderTriage(); trySync();
   });
   function checkServer() {
     if (!/^https?:$/.test(location.protocol)) { server = false; renderLog(); return Promise.resolve(false); }
@@ -439,18 +478,25 @@
     if (server !== true) return;
     var wait = scans.filter(function (s) { return !s.synced; });
     if (!wait.length) return;
-    fetch("api/scans", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ scans: wait.map(function (s) { var c = {}; Object.keys(s).forEach(function (k) { if (k !== "synced") c[k] = s[k]; }); return c; }) }) })
-      .then(function (r) { return r.json(); })
+    if (!devKey || !(window.crypto && crypto.subtle)) { $("sync-msg").textContent += "　係員の鍵が入っていないので送れない。"; return; }
+    var raw = JSON.stringify({ scans: wait.map(function (s) { var c = {}; Object.keys(s).forEach(function (k) { if (k !== "synced") c[k] = s[k]; }); return c; }) });
+    hmacHex(devKey, raw).then(function (sig) {
+      return fetch("api/scans", { method: "POST", headers: { "content-type": "application/json", "x-okusuri-device": dev, "x-okusuri-sig": sig }, body: raw });
+    })
+      .then(function (r) { if (r.status === 401) throw new Error("鍵"); return r.json(); })
       .then(function (res) {
         var bad = {}; (res.rejected || []).forEach(function (x) { bad[x.sid] = x.reason; });
         wait.forEach(function (s) { if (!bad[s.sid]) s.synced = true; });
         saveScans(); renderLog();
         $("sync-msg").textContent += "　送信した（サーバーの記録 " + res.total + "件" + (res.rejected.length ? "、断られた " + res.rejected.length + "件" : "") + "）";
-      }, function () { server = false; renderLog(); });
+      }, function (e) {
+        if (e && e.message === "鍵") { $("sync-msg").textContent += "　サーバーがこの端末の鍵を受け付けなかった。"; return; }
+        server = false; renderLog();
+      });
   }
   $("btn-sync").addEventListener("click", trySync);
   $("btn-log-clear").addEventListener("click", function () { scans = []; saveScans(); renderLog(); });
-  window.addEventListener("online", function () { checkServer().then(trySync); });
+  window.addEventListener("online", function () { checkServer().then(function () { trySync(); sendLost(); renderPatient(); }); });
   window.addEventListener("offline", function () { server = false; renderLog(); });
 
   /* ---------- 起動 ---------- */
@@ -458,7 +504,7 @@
   var h = (location.hash || "").replace("#", "");
   if (!h && load()) { if (quake) $("evac").hidden = false; if (place !== "未登録" || lostA) $("qr").hidden = false; }
   computePlan();
-  renderPatient(); renderLog(); checkServer().then(trySync);
+  renderPatient(); renderLog(); checkServer().then(function () { trySync(); sendLost(); if (lostA) renderPatient(); });
   if (/^https?:$/.test(location.protocol) && "serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () {});
   if (h === "triage" || h === "triage-off") { if (h === "triage-off") mode = "off"; show("triage"); }
   else if (h === "lost") { quake = true; lostA = true; place = "北山小学校 体育館"; $("evac").hidden = false; $("qr").hidden = false; renderPatient(); }

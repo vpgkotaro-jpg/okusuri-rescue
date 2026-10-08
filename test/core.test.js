@@ -1,7 +1,7 @@
 // 実行：node --test app/test/*.test.js   （Node 18 以降。外部ライブラリなし）
 const test = require("node:test");
 const assert = require("node:assert");
-const Core = require("../lastone-core.js");
+const Core = require("../okusuri-core.js");
 
 /* ---------- 危険になる日 ---------- */
 test("危険になる日 = 手元の日数 + 分類の猶予", () => {
@@ -44,7 +44,7 @@ test("間に合わない人には枠を使わない（後ろに回す）", () =>
   assert.strictEqual(Core.schedule(jobs, 1, "fifo").late.length, 2);
 });
 
-test("edf は全探索の最適と一致する（届けられる最初の日が全員同じ：2,000問）", () => {
+test("edf は全探索の最適と一致する（1問1〜8人、届けられる最初の日が全員同じ：2,000問）", () => {
   let seed = 20261012;
   const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   for (let t = 0; t < 2000; t++) {
@@ -57,7 +57,7 @@ test("edf は全探索の最適と一致する（届けられる最初の日が�
   }
 });
 
-test("edf は全探索の最適と一致する（最初の日も人ごとに違う：3,000問）", () => {
+test("edf は全探索の最適と一致する（1問1〜9人、最初の日も人ごとに違う：3,000問）", () => {
   let seed = 7;
   const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
   for (let t = 0; t < 3000; t++) {
@@ -101,7 +101,7 @@ test("型番ごとのデータ容量（レベルM）", () => {
 });
 
 test("避難所カードの文が入る型番を選び、位置合わせの模様がある", () => {
-  const text = "LASTONE 避難所カード\n名前 Aさん（架空）\n中断不可 抗てんかん薬・ステロイド\n手元 0日（家が壊れた）";
+  const text = "おくすりレスキュー 避難所カード\n名前 Aさん（架空）\n中断不可 抗てんかん薬・ステロイド\n手元 0日（家が壊れた）";
   const q = Core.qrEncode(text);
   assert.strictEqual(q.size, q.version * 4 + 17);
   // 左上の位置検出パターン（7×7）：外枠が黒、その内側が白、中央3×3が黒
@@ -154,7 +154,7 @@ test("別の人の署名を付け替えたカードは通らない", async () =>
 test("記録の突き合わせは、順番・回数によらず同じ結果になる（500問）", () => {
   let seed = 5;
   const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-  const mk = () => ({ sid: "d" + Math.floor(rnd() * 3) + "-" + Math.floor(rnd() * 6), id: "LO-000" + (1 + Math.floor(rnd() * 3)),
+  const mk = () => ({ sid: "d" + Math.floor(rnd() * 3) + "-" + Math.floor(rnd() * 6), id: "OR-000" + (1 + Math.floor(rnd() * 3)),
     at: "2026-10-1" + Math.floor(rnd() * 4) + "T0" + Math.floor(rnd() * 9) + ":00", hand: Math.floor(rnd() * 4), rev: Math.floor(rnd() * 3) });
   for (let t = 0; t < 500; t++) {
     const a = Array.from({ length: Math.floor(rnd() * 6) }, mk), b = Array.from({ length: Math.floor(rnd() * 6) }, mk), c = Array.from({ length: Math.floor(rnd() * 6) }, mk);
@@ -167,8 +167,8 @@ test("記録の突き合わせは、順番・回数によらず同じ結果に�
 });
 
 test("カードごとに最新の読み取りを返す", () => {
-  const s = [{ sid: "a-1", id: "LO-0001", at: "2026-10-12T09:00", hand: 2 }, { sid: "b-1", id: "LO-0001", at: "2026-10-12T15:00", hand: 0 }];
-  assert.strictEqual(Core.latestByCard(s)["LO-0001"].hand, 0);
+  const s = [{ sid: "a-1", id: "OR-0001", at: "2026-10-12T09:00", hand: 2 }, { sid: "b-1", id: "OR-0001", at: "2026-10-12T15:00", hand: 0 }];
+  assert.strictEqual(Core.latestByCard(s)["OR-0001"].hand, 0);
 });
 
 /* ---------- 患者アプリの災害時のお知らせ（3行） ---------- */
@@ -176,17 +176,17 @@ test("災害時のお知らせは「いつ届く・受け取る所・それま�
   const lost = Core.patientNotice({ lost: true, arrival: 3, drone: true, place: "北山小学校 体育館", hand: 0, cls: "imm" });
   assert.strictEqual(lost.title, "手元の薬を失ったと記録した");
   assert.deepStrictEqual(lost.rows.map((r) => r[0]), ["いつ届く", "受け取る所", "それまで"]);
-  assert.strictEqual(lost.rows[0][1], "発災3日目ごろ（ドローン）");
+  assert.strictEqual(lost.rows[0][1], "発災から3日後ごろ（ドローン）");
   assert.strictEqual(lost.rows[1][1], "北山小学校 体育館の救護所");
   assert.ok(lost.short && /先にもらう/.test(lost.rows[2][1]));
   for (const [, v] of lost.rows) assert.ok(v.length <= 26, "1行に収まる長さ：" + v);
   // 手元で届くまでもつ人には、待てばよいと伝える
   const ok = Core.patientNotice({ lost: false, arrival: 1, drone: false, place: "本町公民館", hand: 5, cls: "imm" });
   assert.ok(!ok.short && /待つ/.test(ok.rows[2][1]));
-  assert.strictEqual(ok.rows[0][1], "発災1日目ごろ（車）");
+  assert.strictEqual(ok.rows[0][1], "発災から1日後ごろ（車）");
   // 届け方がまだない・場所が未登録
   const none = Core.patientNotice({ lost: true, arrival: null, place: "未登録", hand: 0 });
   assert.ok(none.short && /調整中/.test(none.rows[0][1]) && /登録/.test(none.rows[1][1]));
-  // 48〜72時間の薬は猶予2日を足して比べる（手元1日・3日目に届く → 1+2=3 で間に合う）
+  // 48〜72時間の薬は猶予2日を足して比べる（手元1日・3日後に届く → 1+2=3 で間に合う）
   assert.ok(!Core.patientNotice({ arrival: 3, place: "自宅", hand: 1, cls: "h72" }).short);
 });

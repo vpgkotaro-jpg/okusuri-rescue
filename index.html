@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LASTONE</title>
+<title>おくすりレスキュー</title>
 <meta name="description" content="災害で手元の薬を失った人に、別の地方に預けた本人の薬を届けるWebアプリ（デモ）">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#23508f">
@@ -221,7 +221,7 @@ details summary { font-size: .8125rem; }
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand"><b>LASTONE.</b><span>本人の薬の7日分を、自宅と別の地方の「薬バンク」で預かる。災害が起きたら、薬が切れる順に、いまいる場所へ届ける。</span></div>
+    <div class="brand"><b>おくすりレスキュー</b><span>本人の薬の7日分を、自宅と別の地方の「薬バンク」で預かる。災害が起きたら、薬が切れる順に、いまいる場所へ届ける。</span></div>
     <div class="tabs" role="tablist" aria-label="画面">
       <button role="tab" id="tab-patient" aria-selected="true" aria-controls="view-patient">患者アプリ</button>
       <button role="tab" id="tab-triage" aria-selected="false" aria-controls="view-triage">災害時トリアージ（係員）</button>
@@ -240,8 +240,8 @@ details summary { font-size: .8125rem; }
   <section id="view-patient" role="tabpanel" aria-labelledby="tab-patient">
     <div class="patient">
       <div class="phone" aria-label="患者アプリの画面">
-        <div class="bar"><span class="num" id="ph-date">10/3</span><span>LASTONE</span></div>
-        <div class="ph-head"><b>Aさん（架空）</b><span class="pill p-info">ID LO-0001</span></div>
+        <div class="bar"><span class="num" id="ph-date">10/3</span><span>おくすりレスキュー</span></div>
+        <div class="ph-head"><b>Aさん（架空）</b><span class="pill p-info">ID OR-0001</span></div>
         <div id="ph-alert" class="alert calm"></div>
         <div id="ph-drugs" style="display:flex;flex-direction:column;gap:.6rem"></div>
         <div class="legend-s"><span><i style="background:var(--accent)"></i>手元（ふだんの処方分）</span><span><i style="background:var(--safe)"></i>預かり（薬バンク）</span></div>
@@ -291,7 +291,7 @@ details summary { font-size: .8125rem; }
         </div>
         <div class="panel">
           <h2>なぜ「別の地方」に預けるのか</h2>
-          <p class="muted">能登半島地震では、珠洲市で卸からの医薬品の供給が戻ったのは発災10日後だった。近くの薬局に備えても、その薬局が同じ地震で被災する。一社流通の希少疾患の薬は、そもそも近くの薬局にない。預かるのは本人に処方済みの薬なので、届けるときに新しい処方箋は要らない。最初は室温で保存できる飲み薬だけを扱う（冷蔵・注射・医療用麻薬は対象外）。</p>
+          <p class="muted">能登半島地震では、珠洲市の臨時調剤所に卸からの医薬品が届き始めたのは発災から10日後だった。近くの薬局に備えても、その薬局が同じ地震で被災する。一社流通の希少疾患の薬は、そもそも近くの薬局にない。預かるのは本人に処方済みの薬なので、届けるときに新しい処方箋は要らない。最初は室温で保存できる飲み薬だけを扱う（冷蔵・注射・医療用麻薬は対象外）。</p>
         </div>
       </div>
     </div>
@@ -304,34 +304,39 @@ details summary { font-size: .8125rem; }
         <div class="ctl">
           <label>預かりのしくみ</label>
           <div class="seg" role="group" aria-label="預かりのしくみ">
-            <button id="mode-off" aria-pressed="false">LASTONE なし</button>
-            <button id="mode-on" aria-pressed="true">LASTONE あり</button>
+            <button id="mode-off" aria-pressed="false">おくすりレスキューなし</button>
+            <button id="mode-on" aria-pressed="true">おくすりレスキューあり</button>
           </div>
         </div>
         <div class="ctl">
-          <label for="sup">卸からの供給が戻る日：<span class="num" id="sup-v">10</span>日目</label>
+          <label for="sup">卸からの供給が戻る日：発災から <span class="num" id="sup-v">10</span>日後</label>
           <input type="range" id="sup" min="3" max="14" value="10">
-          <div class="sub"><button class="chip" data-sup="3">3日（備蓄要件の想定）</button><button class="chip" data-sup="10">10日（珠洲市の実際）</button></div>
+          <div class="sub"><button class="chip" data-sup="3">3日後（備蓄要件の想定）</button><button class="chip" data-sup="10">10日後（珠洲市の臨時調剤所）</button></div>
         </div>
         <div class="ctl">
-          <label for="day">地図の日付：発災から <span class="num" id="day-v">5</span>日目</label>
+          <label for="day">地図の日付：発災から <span class="num" id="day-v">5</span>日後</label>
           <input type="range" id="day" min="0" max="14" value="5">
         </div>
         <div class="ctl">
-          <label for="cap">ドローン1拠点の便/日（仮置き）：<span class="num" id="cap-v">6</span>件</label>
+          <label for="cap">ドローン1拠点の便/日（仮置き）：<span class="num" id="cap-v">6</span>便</label>
           <input type="range" id="cap" min="1" max="12" value="6">
-          <div class="sub"><button class="chip" data-cap="1">1件（機体が少ない）</button><button class="chip" data-cap="12">12件（足りている）</button></div>
+          <div class="sub"><button class="chip" data-cap="1">1便（機体が少ない）</button><button class="chip" data-cap="12">12便（足りている）</button></div>
+        </div>
+        <div class="ctl">
+          <label for="pay">1便に積む人数（仮置き）：<span class="num" id="pay-v">1</span>人分</label>
+          <input type="range" id="pay" min="1" max="6" value="1">
+          <div class="sub">1便は1つの地区の避難所へ行く</div>
         </div>
       </div>
     </div>
 
     <div class="kpis kpi4">
-      <div class="kpi bad"><span>LASTONE なし</span><b class="num" id="k-off">0人</b><small>卸の供給が戻る前に薬が切れる人（24人中）</small></div>
+      <div class="kpi bad"><span>おくすりレスキューなし</span><b class="num" id="k-off">0人</b><small>卸の供給が戻る前に薬が切れる人（24人中）</small></div>
       <div class="kpi"><span>預けたが、登録順に送る</span><b class="num" id="k-onf">0人</b><small>預けた分が効く（ドローンは登録順）</small></div>
-      <div class="kpi good"><span>LASTONE（預ける＋割り当て）</span><b class="num" id="k-on">0人</b><small>同じ条件で、薬が切れる人</small></div>
+      <div class="kpi good"><span>おくすりレスキュー（預ける＋割り当て）</span><b class="num" id="k-on">0人</b><small>同じ条件で、薬が切れる人</small></div>
       <div class="kpi"><span>預かり分が届く前に切れる人</span><b class="num" id="k-need">0人</b><small id="k-route">近くの救護所・薬局の在庫で先につなぐ</small></div>
     </div>
-    <p class="muted" style="margin:0">数え方：どちらのモードでも、車で行ける地区の人は、開いている近くの薬局に同じ薬の在庫があればそこでつなげるとして数えない。LASTONE なしは、それ以外の人が手元の分だけで卸の供給を待つ。LASTONE ありは、預かり分が下の配送計画の日に届き、そこから預けた日数が足される。2つ目は、預けるが、ドローンは登録した順に送った場合（預けた効果と、送る順番の効果を分けて見るため）。</p>
+    <p class="muted" style="margin:0">数え方：どちらのモードでも、車で行ける地区の人は、開いている近くの薬局に同じ薬の在庫があればそこでつなげるとして数えない。おくすりレスキューなしは、それ以外の人が手元の分だけで卸の供給を待つ。おくすりレスキューありは、預かり分が下の配送計画の日に届き、そこから預けた日数が足される。2つ目は、預けるが、ドローンは登録した順に送った場合（預けた効果と、送る順番の効果を分けて見るため）。</p>
 
     <div class="triage">
       <div class="panel map">
@@ -351,7 +356,7 @@ details summary { font-size: .8125rem; }
         <div class="cmp cmp3">
           <div class="bad"><span>登録した順</span><b class="num" id="c-fifo">0人</b><small class="muted">届く前に切れる人</small></div>
           <div class="bad"><span>締切順に並べるだけ</span><b class="num" id="c-sorted">0人</b><small class="muted">間に合わない人にも枠を使う</small></div>
-          <div class="good"><span>LASTONE の割り当て</span><b class="num" id="c-edf">0人</b><small class="muted">間に合う人数が最大</small></div>
+          <div class="good"><span>おくすりレスキューの割り当て</span><b class="num" id="c-edf">0人</b><small class="muted">間に合う人数が最大</small></div>
         </div>
         <p class="muted" id="c-note"></p>
         <div class="tbl"><table id="sweep"></table></div>
@@ -384,6 +389,15 @@ details summary { font-size: .8125rem; }
         <h2>この端末の読み取り記録</h2>
         <p class="muted" id="sync-msg"></p>
         <div class="tbl"><table id="scanlog"></table></div>
+        <details>
+          <summary class="muted" style="cursor:pointer">この端末の鍵（サーバーへ送るとき）</summary>
+          <div class="row-btns" style="margin-top:.4rem;align-items:center">
+            <span class="muted">端末ID <b id="dev-id"></b></span>
+            <input id="dev-key" type="password" autocomplete="off" aria-label="この端末の鍵" style="padding:.4rem;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg)">
+            <button class="btn" id="btn-dev-key">鍵を入れる</button>
+          </div>
+          <p class="muted" style="margin:.3rem 0 0">サーバーには端末IDごとの鍵を登録しておく。鍵のない端末の記録や、ほかの端末の記録の上書きは受け付けない。</p>
+        </details>
         <div class="row-btns">
           <button class="btn" id="btn-sync">サーバーへ送る</button>
           <button class="btn" id="btn-log-clear">記録を消す</button>
@@ -393,9 +407,9 @@ details summary { font-size: .8125rem; }
 
     <div class="panel">
       <h2>届ける順番（危険になる日が早い順）</h2>
-      <p class="muted">危険になる日 ＝ 手元の日数 ＋ 猶予（即時中断不可は0日、48〜72時間以内に確保は2日。分類は厚労科研「難病患者の災害対策ガイドライン」2026による）。LASTONE ありでは、預かり分が届く日までもてば、そこから預けた日数（基本7日、孤立しやすい地区と一社流通の薬は14日）が足される。<span class="route A">A</span> 薬バンクから本人の薬を直送　<span class="route B">B</span> 一社流通で残薬がなく「引当」で始めた人は、卸の引当分を被災地の薬局で特例調剤　<span class="route C">C</span> ドローン</p>
+      <p class="muted">危険になる日 ＝ 手元の日数 ＋ 猶予（即時中断不可は0日、48〜72時間以内に確保は2日。分類は「難病患者の災害対策ガイドライン」2026年3月 p.41–42 による）。おくすりレスキューありでは、預かり分が届く日までもてば、そこから預けた日数（基本7日、孤立しやすい地区と一社流通の薬は14日）が足される。<span class="route A">A</span> 薬バンクから本人の薬を直送　<span class="route B">B</span> 一社流通で残薬がなく「引当」で始めた人は、卸の引当分を被災地の薬局で特例調剤　<span class="route C">C</span> ドローン</p>
       <div class="tbl-wrap"><div class="tbl"><table>
-        <thead><tr><th>順</th><th>人</th><th>地区</th><th>薬</th><th class="r">もつ日数</th><th class="r">危険になる日</th><th>届け方</th></tr></thead>
+        <thead><tr><th>順</th><th>人</th><th>地区</th><th>薬</th><th class="r">もつ日数</th><th class="r">危険になる日（発災から）</th><th>届け方</th></tr></thead>
         <tbody id="rows"></tbody>
       </table></div></div>
       <div class="row-btns">
@@ -407,13 +421,13 @@ details summary { font-size: .8125rem; }
   </section>
 
   <footer>
-    数字の根拠：珠洲市で卸の供給が戻った日（Koike Y, et al. J Pharm Health Care Sci 2026;12:45）／災害拠点病院の備蓄要件「3日分程度」（医政発0331第33号）／薬の分類（厚労科研「難病患者の災害対策ガイドライン」2026年3月 p.41–42, 75）／災害時の保険調剤の特例（保医発0331第2号）。ドローンの特例飛行は航空法132条の92（自治体の依頼が前提）。患者・地区・道路・手元の日数・ドローンの便数と飛べる距離はすべて架空・仮置き。<br>
-    作り：ロジックは lastone-core.js（配送計画・署名・QR生成）と qr-read.js（QR読み取り）。どちらもブラウザとサーバー（server.js）とテストで同じものを使う。QR生成は Project Nayuki の実装（MIT）の移植、読み取りは規格から自作。
+    数字の根拠：珠洲市の臨時調剤所に卸の医薬品が届き始めた日（Koike Y, et al. J Pharm Health Care Sci 2026;12:45）／災害拠点病院の備蓄要件「3日分程度」（医政発0331第33号）／薬の分類（「難病患者の災害対策ガイドライン」難病患者の総合的地域支援体制に関する研究班〔小森班〕2026年3月 p.41–42）／災害時の保険調剤の特例（保医発0331第2号）。ドローンの特例飛行は航空法132条の92（自治体の依頼が前提）。患者・地区・道路・手元の日数・ドローンの便数と飛べる距離はすべて架空・仮置き。<br>
+    作り：ロジックは okusuri-core.js（配送計画・署名・QR生成）と qr-read.js（QR読み取り）。どちらもブラウザとサーバー（server.js）とテストで同じものを使う。QR生成は Project Nayuki の実装（MIT）の移植、読み取りは規格から自作。
   </footer>
 </div>
 
 <script src="demo-data.js"></script>
-<script src="lastone-core.js"></script>
+<script src="okusuri-core.js"></script>
 <script src="qr-read.js"></script>
 <script src="app.js"></script>
 </body>

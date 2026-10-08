@@ -23,7 +23,7 @@ SOFTWARE.
 ------------------------------------------------------------------------------
 Third-party notice
 
-The QR code generator in lastone-core.js (section 3) is a port of
+The QR code generator in okusuri-core.js (section 3) is a port of
 "QR Code generator library" by Project Nayuki
 (https://www.nayuki.io/page/qr-code-generator-library), used under the MIT License:
 

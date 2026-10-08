@@ -1,19 +1,19 @@
-/* LASTONE QR 読み取り（係員の端末のカメラ・画像から、避難所カードを読む）
- *  参考実装は写さず、規格 ISO/IEC 18004 の手順を順に書いた。生成側（lastone-core.js）の表と模様の配置を共有する。
+/* おくすりレスキュー QR 読み取り（係員の端末のカメラ・画像から、避難所カードを読む）
+ *  参考実装は写さず、規格 ISO/IEC 18004 の手順を順に書いた。生成側（okusuri-core.js）の表と模様の配置を共有する。
  *   1. 画像を白黒にする（画像全体のしきい値と、周りの明るさとの比較の2通りを試す）
  *   2. 位置検出パターン（黒白黒白黒が 1:1:3:1:1）を横に探し、縦でも確かめる
  *   3. 3つの位置から向きと大きさを出し、右下の位置合わせパターンを探して、射影変換で格子を読む
- *      （型番7以上は型番情報を読んで大きさを決める。位置合わせパターンは右下の1つだけ使い、
- *       大きい型番の中ほどにあるものは使っていない。紙が大きく曲がっていると読めないことがある）
+ *      （型番7以上は型番情報を読んで大きさを決める）。読めなければ、位置合わせパターンを全部探して
+ *      区画ごとの射影変換で読む（曲がった紙のため）
  *   4. 形式情報 → マスクを外す → 符号語の並べ替えを戻す
  *   5. Reed–Solomon の誤り訂正（Berlekamp–Massey → Chien 探索 → Forney）
  *   6. データを読む（数字・英数字・8ビットバイト・漢字）
  */
 (function (root, factory) {
-  var core = typeof module === "object" && module.exports ? require("./lastone-core.js") : root.LastoneCore;
+  var core = typeof module === "object" && module.exports ? require("./okusuri-core.js") : root.OkusuriCore;
   var lib = factory(core);
   if (typeof module === "object" && module.exports) module.exports = lib;
-  else root.LastoneQRRead = lib;
+  else root.OkusuriQRRead = lib;
 })(typeof self !== "undefined" ? self : this, function (Core) {
   "use strict";
   var Q = Core._qr;
@@ -420,9 +420,174 @@
     return found.map(function (q) { return T(q.x, q.y); });
   }
 
+  /* ---------------- 曲がった紙：位置合わせパターンを全部探し、区画ごとに射影変換する ----------------
+   * 型番7以上には位置合わせパターンが格子状に並ぶ（型番15なら 4×4 から角の3つを除いた13個）。
+   * 位置検出パターン3つと位置合わせパターンを制御点にして、隣り合う4点で囲まれた区画ごとに射影変換を作る。
+   * まだ見つけていない点の位置は、見つけた点のうち近い3点のアフィン変換で予想する。 */
+  function affineFrom(pts) {          // pts: [{mx, my, px, py}] 3点 → モジュール座標から画像座標へのアフィン変換
+    var a = pts[0], b = pts[1], c = pts[2];
+    var d = (b.mx - a.mx) * (c.my - a.my) - (c.mx - a.mx) * (b.my - a.my);
+    if (Math.abs(d) < 1e-9) return null;
+    function solve(va, vb, vc) {      // v = p0 + p1·(mx−a.mx) + p2·(my−a.my)
+      var p1 = ((vb - va) * (c.my - a.my) - (vc - va) * (b.my - a.my)) / d;
+      var p2 = ((vc - va) * (b.mx - a.mx) - (vb - va) * (c.mx - a.mx)) / d;
+      return [va, p1, p2];
+    }
+    var X = solve(a.px, b.px, c.px), Y = solve(a.py, b.py, c.py);
+    return { at: function (mx, my) { var u = mx - a.mx, v = my - a.my; return [X[0] + X[1] * u + X[2] * v, Y[0] + Y[1] * u + Y[2] * v]; },
+      ex: [X[1], Y[1]], ey: [X[2], Y[2]] };
+  }
+  // 予想の位置のまわり（モジュール単位で ±R）を 0.25 刻みで動かし、5×5 の模様がいちばん合う所の中心を返す。
+  // 紙が曲がると端ほどモジュールが細く見えるので、近くを探すときは縦横の幅を 0.8〜1.25 倍に変えた形も試す
+  function searchAlignment(B, w, h, A, mx, my, R) {
+    var scales = R > 3 ? [[1, 1]] : [[1, 1], [0.8, 1], [1, 0.8], [1.25, 1], [1, 1.25], [0.8, 0.8], [1.25, 1.25]];
+    for (var si = 0; si < scales.length; si++) {
+      var kx = scales[si][0], ky = scales[si][1], best = -1, sx = 0, sy = 0, cnt = 0;
+      for (var dy = -R; dy <= R; dy += 0.25) for (var dx = -R; dx <= R; dx += 0.25) {
+        var ok = 0;
+        for (var yy = -2; yy <= 2; yy++) for (var xx = -2; xx <= 2; xx++) {
+          var p = A.at(mx + dx + xx * kx, my + dy + yy * ky), px = Math.round(p[0]), py = Math.round(p[1]);
+          var v = px >= 0 && py >= 0 && px < w && py < h ? B[py * w + px] === 1 : false;
+          if (v === (Math.max(Math.abs(xx), Math.abs(yy)) !== 1)) ok++;
+        }
+        if (ok > best) { best = ok; sx = dx; sy = dy; cnt = 1; }
+        else if (ok === best) { sx += dx; sy += dy; cnt++; }
+      }
+      if (best >= 23) { var c = A.at(mx + sx / cnt, my + sy / cnt); return { px: c[0], py: c[1], score: best }; }
+    }
+    return null;
+  }
+  // 近い6点から、面積が大きく近い3点を選んでアフィン変換を作る
+  function localAffine(known, mx, my) {
+    var near = known.slice().sort(function (a, b) { return Math.hypot(a.mx - mx, a.my - my) - Math.hypot(b.mx - mx, b.my - my); }).slice(0, 6);
+    var T = null, best = 0;
+    for (var i = 0; i < near.length; i++) for (var j = i + 1; j < near.length; j++) for (var l = j + 1; l < near.length; l++) {
+      var a = near[i], b = near[j], e = near[l];
+      var area = Math.abs((b.mx - a.mx) * (e.my - a.my) - (e.mx - a.mx) * (b.my - a.my));
+      var dsum = Math.hypot(a.mx - mx, a.my - my) + Math.hypot(b.mx - mx, b.my - my) + Math.hypot(e.mx - mx, e.my - my);
+      if (area / (dsum * dsum) > best) { best = area / (dsum * dsum); T = [a, b, e]; }
+    }
+    return T && affineFrom(T);
+  }
+  function controlGrid(B, w, h, t, ver) {
+    var ap = Q.alignPositions(ver), n = ap.length, dim = ver * 4 + 17, P = [], r, c;
+    for (r = 0; r < n; r++) { P.push([]); for (c = 0; c < n; c++) P[r].push(null); }
+    P[0][0] = { mx: 3.5, my: 3.5, px: t.tl.x, py: t.tl.y };
+    P[0][n - 1] = { mx: dim - 3.5, my: 3.5, px: t.tr.x, py: t.tr.y };
+    P[n - 1][0] = { mx: 3.5, my: dim - 3.5, px: t.bl.x, py: t.bl.y };
+    var known = [P[0][0], P[0][n - 1], P[n - 1][0]], left = [], found = 0;
+    for (r = 0; r < n; r++) for (c = 0; c < n; c++) if (!P[r][c]) left.push([r, c]);
+    function dist(rc) {
+      var mx = ap[rc[1]] + 0.5, my = ap[rc[0]] + 0.5;
+      return Math.min.apply(null, known.map(function (p) { return Math.hypot(p.mx - mx, p.my - my); }));
+    }
+    // 見つけた点にいちばん近いものから探す。見つかるたびに近さを測り直し、見つからなかった点も次の回にもう一度探す
+    var progress = true;
+    while (progress && left.length) {
+      progress = false;
+      left.sort(function (a, b) { return dist(a) - dist(b); });
+      for (var k = 0; k < left.length; k++) {
+        r = left[k][0]; c = left[k][1];
+        var mx = ap[c] + 0.5, my = ap[r] + 0.5, A = localAffine(known, mx, my);
+        if (!A) return null;
+        var hit = searchAlignment(B, w, h, A, mx, my, 2.5) || searchAlignment(B, w, h, A, mx, my, 4);
+        if (hit) { P[r][c] = { mx: mx, my: my, px: hit.px, py: hit.py }; known.push(P[r][c]); found++; left.splice(k, 1); progress = true; break; }
+      }
+    }
+    // 最後まで見つからなかった点は、見つけた点からの予想で置く
+    for (r = 0; r < n; r++) for (c = 0; c < n; c++) if (!P[r][c]) {
+      var B2 = localAffine(known, ap[c] + 0.5, ap[r] + 0.5), q = B2.at(ap[c] + 0.5, ap[r] + 0.5);
+      P[r][c] = { mx: ap[c] + 0.5, my: ap[r] + 0.5, px: q[0], py: q[1], guess: true };
+    }
+    return { P: P, ap: ap, n: n, found: found, dim: dim };
+  }
+  // 3点を通る2次式で、端の外側（モジュール座標 x）の位置を出す
+  function quadAt(p0, p1, p2, key, x) {
+    var x0 = p0[key], x1 = p1[key], x2 = p2[key];
+    function L(v, a, b, xa) { return v * (x - a) * (x - b) / ((xa - a) * (xa - b)); }
+    return [L(p0.px, x1, x2, x0) + L(p1.px, x0, x2, x1) + L(p2.px, x0, x1, x2), L(p0.py, x1, x2, x0) + L(p1.py, x0, x2, x1) + L(p2.py, x0, x1, x2)];
+  }
+  // 制御点の外側に、QR の縁（モジュール座標 0 と dim）の点を足して (n+2)×(n+2) にする
+  function extendGrid(G) {
+    var n = G.n, dim = G.dim, rows = [], r, c;
+    for (r = 0; r < n; r++) {
+      var R = G.P[r], L0 = quadAt(R[0], R[1], R[2], "mx", 0), L1 = quadAt(R[n - 1], R[n - 2], R[n - 3], "mx", dim);
+      rows.push([{ mx: 0, my: R[0].my, px: L0[0], py: L0[1] }].concat(R, [{ mx: dim, my: R[n - 1].my, px: L1[0], py: L1[1] }]));
+    }
+    var top = [], bot = [];
+    for (c = 0; c < n + 2; c++) {
+      var T0 = quadAt(rows[0][c], rows[1][c], rows[2][c], "my", 0), B0 = quadAt(rows[n - 1][c], rows[n - 2][c], rows[n - 3][c], "my", dim);
+      top.push({ mx: rows[0][c].mx, my: 0, px: T0[0], py: T0[1] });
+      bot.push({ mx: rows[n - 1][c].mx, my: dim, px: B0[0], py: B0[1] });
+    }
+    return [top].concat(rows, [bot]);
+  }
+  // 区画ごとに読めなかったときの最後の手：制御点全体に3次の多項式（10項）を最小二乗で当てはめる。予想で置いた点は重みを下げる
+  function polyMap(G) {
+    var pts = [], s = G.dim;
+    G.P.forEach(function (row) { row.forEach(function (p) { pts.push(p); }); });
+    function terms(u, v) { return [1, u, v, u * u, u * v, v * v, u * u * u, u * u * v, u * v * v, v * v * v]; }
+    var K = 10, M = [], bx = [], by = [], i, j, k;
+    for (i = 0; i < K; i++) { M.push(new Array(K).fill(0)); bx.push(0); by.push(0); }
+    pts.forEach(function (p) {
+      var t = terms(p.mx / s - 0.5, p.my / s - 0.5), wt = p.guess ? 0.1 : 1;
+      for (i = 0; i < K; i++) { bx[i] += wt * t[i] * p.px; by[i] += wt * t[i] * p.py; for (j = 0; j < K; j++) M[i][j] += wt * t[i] * t[j]; }
+    });
+    for (i = 0; i < K; i++) M[i][i] += 1e-9;
+    for (i = 0; i < K; i++) {                // ガウスの消去法
+      var piv = i;
+      for (j = i + 1; j < K; j++) if (Math.abs(M[j][i]) > Math.abs(M[piv][i])) piv = j;
+      var tm = M[i]; M[i] = M[piv]; M[piv] = tm; tm = bx[i]; bx[i] = bx[piv]; bx[piv] = tm; tm = by[i]; by[i] = by[piv]; by[piv] = tm;
+      if (Math.abs(M[i][i]) < 1e-12) return null;
+      for (j = 0; j < K; j++) if (j !== i) {
+        var f = M[j][i] / M[i][i];
+        for (k = i; k < K; k++) M[j][k] -= f * M[i][k];
+        bx[j] -= f * bx[i]; by[j] -= f * by[i];
+      }
+    }
+    var cx = bx.map(function (b, i) { return b / M[i][i]; }), cy = by.map(function (b, i) { return b / M[i][i]; });
+    return function (x, y) {
+      var t = terms(x / s - 0.5, y / s - 0.5), X = 0, Y = 0;
+      for (var i = 0; i < K; i++) { X += cx[i] * t[i]; Y += cy[i] * t[i]; }
+      return [X, Y];
+    };
+  }
+
+  // 区画ごとの射影変換で格子を読む。モジュールの中心がどの区画に入るかは、縁と位置合わせパターンの行・列で決める
+  function sampleGridPiecewise(B, w, h, G) {
+    var dim = G.dim, E = extendGrid(G), m = E.length, Hs = [], r, c;
+    var cuts = [0].concat(G.ap.map(function (a) { return a + 0.5; }), [dim]);
+    for (r = 0; r < m - 1; r++) {
+      Hs.push([]);
+      for (c = 0; c < m - 1; c++) {
+        var q = [E[r][c], E[r][c + 1], E[r + 1][c], E[r + 1][c + 1]];
+        Hs[r].push(homography(q.map(function (p) { return [p.mx, p.my]; }), q.map(function (p) { return [p.px, p.py]; })));
+      }
+    }
+    function cell(v) { var i = 0; while (i < m - 2 && cuts[i + 1] <= v) i++; return i; }
+    var OFF = [[0, 0], [-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]], out = [];
+    for (var y = 0; y < dim; y++) {
+      var row = [], cy = cell(y + 0.5);
+      for (var x = 0; x < dim; x++) {
+        var T = Hs[cy][cell(x + 0.5)];
+        if (!T) return null;
+        var dark = 0;
+        for (var k = 0; k < 5; k++) {
+          var p = T(x + 0.5 + OFF[k][0], y + 0.5 + OFF[k][1]), px = Math.round(p[0]), py = Math.round(p[1]);
+          if (px >= 0 && py >= 0 && px < w && py < h && B[py * w + px] === 1) dark++;
+        }
+        row.push(dark >= 3);
+      }
+      out.push(row);
+    }
+    return out;
+  }
+
   /* img: { data: RGBA の配列, width, height }（canvas の ImageData と同じ形）
-   * 戻り値 { text, version, level, mask, errors, corners } または null */
-  function decodeImage(img) {
+   * opts.alignment："all"（既定。型番7以上で位置合わせパターンを全部使う）／"one"（右下の1つだけ。改良前の読み方）
+   * 戻り値 { text, version, level, mask, errors, corners, piecewise } または null */
+  function decodeImage(img, opts) {
+    var useAll = !opts || opts.alignment !== "one";
     var w = img.width, h = img.height, g = toGray(img);
     var bins = [binOtsu(g), binLocal(g, w, h)];
     for (var bi = 0; bi < bins.length; bi++) {
@@ -457,7 +622,17 @@
           tries.push(T);
           for (var k = 0; k < tries.length; k++) {
             var r = decodeGrid(sampleGrid(B, w, h, tries[k], dim));
-            if (r) { r.corners = [t.tl, t.tr, t.bl]; return r; }
+            if (r) { r.corners = [t.tl, t.tr, t.bl]; r.piecewise = false; return r; }
+          }
+          // 1枚の射影変換で読めず、位置合わせパターンが3×3以上あるとき（型番7以上）は、区画ごとに読む
+          if (useAll && vers[vi] >= 7) {
+            var G = controlGrid(B, w, h, t, vers[vi]);
+            var mg = G && G.found >= 2 && sampleGridPiecewise(B, w, h, G);
+            var rp = mg && decodeGrid(mg);
+            if (rp) { rp.corners = [t.tl, t.tr, t.bl]; rp.piecewise = "cells"; return rp; }
+            var PM = G && G.found >= 6 && polyMap(G);
+            rp = PM && decodeGrid(sampleGrid(B, w, h, PM, dim));
+            if (rp) { rp.corners = [t.tl, t.tr, t.bl]; rp.piecewise = "poly"; return rp; }
           }
         }
       }
@@ -465,5 +640,5 @@
     return null;
   }
 
-  return { rsDecode: rsDecode, decodeGrid: decodeGrid, decodeImage: decodeImage, _: { readFormat: readFormat, readVersion: readVersion, deinterleave: deinterleave, parseSegments: parseSegments, findFinders: findFinders, homography: homography } };
+  return { rsDecode: rsDecode, decodeGrid: decodeGrid, decodeImage: decodeImage, _: { readFormat: readFormat, readVersion: readVersion, deinterleave: deinterleave, parseSegments: parseSegments, findFinders: findFinders, pickTriples: pickTriples, homography: homography, controlGrid: controlGrid, sampleGridPiecewise: sampleGridPiecewise, binOtsu: binOtsu, binLocal: binLocal, toGray: toGray } };
 });

@@ -1,6 +1,6 @@
 {
-  "name": "LASTONE",
-  "short_name": "LASTONE",
+  "name": "おくすりレスキュー",
+  "short_name": "おくすりレスキュー",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

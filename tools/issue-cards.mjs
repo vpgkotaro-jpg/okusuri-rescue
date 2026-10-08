@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
-const Core = require(join(here, "..", "lastone-core.js"));
+const Core = require(join(here, "..", "okusuri-core.js"));
 const Demo = require(join(here, "..", "demo-data.js"));
 const { subtle } = globalThis.crypto;
 const args = process.argv.slice(2);

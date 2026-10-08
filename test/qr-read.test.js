@@ -1,7 +1,7 @@
 // 自作の QR 読み取り（qr-read.js）のテスト。外部ライブラリなし
 const test = require("node:test");
 const assert = require("node:assert");
-const Core = require("../lastone-core.js");
+const Core = require("../okusuri-core.js");
 const R = require("../qr-read.js");
 const { renderQR } = require("./render.js");
 const rng = (seed) => () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
@@ -30,7 +30,7 @@ test("Reed–Solomon：誤りが誤り訂正の数の半分までなら必ず直
   assert.ok(wrongFix / over < 0.05, "直せない誤りを、別のデータに化けさせる割合が小さい：" + wrongFix + "/" + over);
 });
 
-test("格子から読む：4つの誤り訂正レベル × 型番1〜40 × 8つのマスクで、生成した文と一致する", () => {
+test("格子から読む：4つの誤り訂正レベル × 型番1〜40 の160通り（マスクは8種類を順に使う）で、生成した文と一致する", () => {
   const rnd = rng(11);
   let n = 0;
   for (const level of ["L", "M", "Q", "H"]) for (let ver = 1; ver <= 40; ver++) {
@@ -49,7 +49,7 @@ test("格子から読む：4つの誤り訂正レベル × 型番1〜40 × 8つ�
   assert.strictEqual(n, 160);
 });
 
-test("日本語のカードを、汚れ（データ領域のモジュールを反転）があっても読む", () => {
+test("日本語のカードに面積8%の汚れ（四角の中を白黒ランダムに塗り直す。約4%のモジュールが反転）があっても読む（30回）", () => {
   const Demo = require("../demo-data.js");
   const A = Demo.PEOPLE[0];
   const card = Core.cardText(Demo.issuedFields(A), "0日（家が壊れた）", "北山小学校 体育館", Demo.SIGS[A.id]);
@@ -67,7 +67,7 @@ test("日本語のカードを、汚れ（データ領域のモジュールを�
   }
 });
 
-test("画像から読む：回転・遠近のゆがみ・ノイズ・明るさのむらがあっても読む（96枚）", () => {
+test("画像から読む：回転・遠近のゆがみ・ノイズ・明るさのむらをつけた合成画像96枚のうち9割以上を読む", () => {
   const rnd = rng(23);
   let ok = 0, n = 0;
   for (const level of ["L", "M", "Q", "H"]) for (let t = 0; t < 24; t++) {
@@ -98,7 +98,7 @@ test("ブラウザの画面のスクリーンショットから、カードを�
   const Demo = require("../demo-data.js");
   const v = await Core.verifyCard(r.text, Demo.ISSUER_PUB, Demo.DEMO_TODAY);
   assert.ok(v.ok, v.reason);
-  assert.strictEqual(v.card.ID, "LO-0001");
+  assert.strictEqual(v.card.ID, "OR-0001");
 });
 
 test("型番情報（型番7〜40）を読み、3ビットまでの誤りを直す", () => {
@@ -111,4 +111,21 @@ test("型番情報（型番7〜40）を読み、3ビットまでの誤りを直�
     for (const i of [0, 7, 15]) { const x = size - 11 + i % 3, y = Math.floor(i / 3); m[y][x] = !m[y][x]; }   // 右上を3ビット壊す
     assert.strictEqual(R._.readVersion(m), ver);
   }
+});
+
+test("曲げた紙の合成画像：位置合わせパターンを全部使うと、右下の1つだけのときより多く読める（曲がり30〜50度、16枚）", () => {
+  const Demo = require("../demo-data.js");
+  const rnd = rng(41);
+  let one = 0, all = 0;
+  for (let t = 0; t < 16; t++) {
+    const p = Demo.PEOPLE[t];
+    const s = Core.cardText(Demo.issuedFields(p), p.onHand + "日分", "北山小学校 体育館", Demo.SIGS[p.id]);
+    const q = Core.qrEncode(s);
+    const img = renderQR(q.modules, { W: 640, H: 640, scale: 5.2, rot: rnd() * 6.283, bend: 0.52 + rnd() * 0.35, persp: rnd() * 0.1, noise: rnd() * 20, shade: rnd() * 40, seed: t + 1 });
+    const a = R.decodeImage(img, { alignment: "one" }), b = R.decodeImage(img);
+    if (a && a.text === s) one++;
+    if (b && b.text === s) all++;
+  }
+  console.log(`  曲げた紙16枚：全部使う ${all}枚／右下の1つだけ ${one}枚`);
+  assert.ok(all >= 14 && all > one + 4, "全部使う " + all + "／1つだけ " + one);
 });
